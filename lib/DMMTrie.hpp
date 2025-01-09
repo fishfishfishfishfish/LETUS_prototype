@@ -171,7 +171,7 @@ class DeltaPage : public Page {
                          uint64_t fileID, uint64_t offset, uint64_t size);
   void SerializeTo();
   void ClearDeltaPage();
-  vector<DeltaItem> GetDeltaItems() const;
+  const vector<DeltaItem>& GetDeltaItems() const;
   PageKey GetLastPageKey() const;
   void SetLastPageKey(PageKey pagekey);
   uint16_t GetDeltaPageUpdateCount();
@@ -199,7 +199,7 @@ class BasePage : public Page {
                   const string &value, const string &nibbles,
                   const string &child_hash, DeltaPage *deltapage,
                   PageKey pagekey);
-  void UpdateDeltaItem(DeltaPage::DeltaItem deltaitem);
+  void UpdateDeltaItem(const DeltaPage::DeltaItem &deltaitem);
   Node *GetRoot() const;
 
  private:
