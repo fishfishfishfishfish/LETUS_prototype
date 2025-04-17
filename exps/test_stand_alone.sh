@@ -8,17 +8,16 @@ cd ../
 cd exps/
 mkdir -p results
 cd results
-mkdir -p micro_benchmark
+mkdir -p stand_alone
 cd ..
 
 # 定义测试参数数组
-load_account=(10000)
-# load_account=(40000000)
-batch_sizes=(500 1000 2000 3000 4000 5000)
-value_sizes=(256 512 1024 2048)
+# standalone evaluation
+load_account=(20000000 40000000 80000000 100000000)
+batch_sizes=(8000) 
+value_sizes=(800)
 num_transaction_version=20
-# load_batch_size=20000
-load_batch_size=2000
+load_batch_size=20000
 key_size=65
 
 data_path="$PWD/../data/"
@@ -37,7 +36,7 @@ for n_acc in "${load_account[@]}"; do
             rm -rf $index_  path
             mkdir -p $index_path
             
-            result_path="$PWD/results/micro_benchmark/acc${n_acc}b${batch_size}v${value_size}.csv"
+            result_path="$PWD/results/stand_alone/acc${n_acc}b${batch_size}v${value_size}.csv"
             echo $(date "+%Y-%m-%d %H:%M:%S") 
             echo "num account: ${n_acc}, batch_size: ${batch_size}, value_size: ${value_size}, key_size: ${key_size}" 
             # 运行测试并提取结果
@@ -49,4 +48,4 @@ for n_acc in "${load_account[@]}"; do
     done
 done
 
-python3 plot.py micro_benchmark
+python3 plot.py stand_alone
