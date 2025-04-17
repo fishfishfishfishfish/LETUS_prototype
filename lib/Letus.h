@@ -13,6 +13,7 @@ void LetusDelete(Letus* p, uint64_t tid, uint64_t version, const char* key_c);
 char* LetusGet(Letus* p, uint64_t tid, uint64_t version, const char* key_c);
 bool LetusRevert(Letus* p, uint64_t tid, uint64_t version);
 bool LetusCalcRootHash(Letus* p, uint64_t tid, uint64_t version);
+char* LetusGetRootHash(Letus* p, uint64_t tid, uint64_t version);
 bool LetusFlush(Letus* p, uint64_t tid, uint64_t version);
 LetusProofPath* LetusProof(Letus* p, uint64_t tid, uint64_t version,
                            const char* key_c);

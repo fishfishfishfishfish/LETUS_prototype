@@ -77,9 +77,21 @@ bool LetusRevert(Letus* p, uint64_t tid, uint64_t version) {
   return true;
 }
 bool LetusCalcRootHash(Letus* p, uint64_t tid, uint64_t version) {
-  p->trie->Commit(version);
+  p->trie->CalcRootHash(tid, version);
   // [TODO] replace to CalcRootHash
   return true;
+}
+
+char* LetusGetRootHash(Letus* p, uint64_t tid, uint64_t version) {
+  std::string hash = p->trie->GetRootHash(tid, version);
+  size_t hash_size = hash.size();
+  char* hash_c = new char[hash_size + 1];
+  hash.copy(hash_c, hash_size, 0);
+  hash_c[hash_size] = '\0';
+#ifdef DEBUG
+  std::cout << "value: " << hash << "," << hash_c << std::endl;
+#endif
+  return hash_c;
 }
 
 bool LetusFlush(Letus* p, uint64_t tid, uint64_t version) {
