@@ -20,24 +20,31 @@
 
 using namespace std;
 
-string HashFunction(const string &input) {  // hash function SHA-256
-  EVP_MD_CTX *ctx = EVP_MD_CTX_new();       // create SHA-256 context
+// string HashFunction(const string &input) {  // hash function SHA-256
+//   EVP_MD_CTX *ctx = EVP_MD_CTX_new();       // create SHA-256 context
 
-  // initialize SHA-256 hash computation
-  EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+//   // initialize SHA-256 hash computation
+//   EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
 
-  // update the hash with input string
-  EVP_DigestUpdate(ctx, input.c_str(), input.size());
+//   // update the hash with input string
+//   EVP_DigestUpdate(ctx, input.c_str(), input.size());
 
-  unsigned char hash[EVP_MAX_MD_SIZE];
-  unsigned int hash_len = 0;
+//   unsigned char hash[EVP_MAX_MD_SIZE];
+//   unsigned int hash_len = 0;
 
-  EVP_DigestFinal_ex(ctx, hash, &hash_len);
+//   EVP_DigestFinal_ex(ctx, hash, &hash_len);
 
-  EVP_DigestFinal_ex(ctx, hash, &hash_len);
-  EVP_MD_CTX_free(ctx);
+//   EVP_DigestFinal_ex(ctx, hash, &hash_len);
+//   EVP_MD_CTX_free(ctx);
 
-  return string(reinterpret_cast<char *>(hash), hash_len);
+//   return string(reinterpret_cast<char *>(hash), hash_len);
+// }
+
+string HashFunction(const string &input) { // SHA 1
+  unsigned char hash[SHA_DIGEST_LENGTH];
+  SHA1(reinterpret_cast<const unsigned char*>(input.c_str()),
+        input.size(), hash);
+  return string(reinterpret_cast<char *>(hash), SHA_DIGEST_LENGTH);
 }
 
 auto CompareStrings = [](const std::string &a, const std::string &b) {
@@ -78,7 +85,8 @@ LeafNode::LeafNode(uint64_t V, const string &k,
     : version_(V), key_(k), location_(l), hash_(h), is_leaf_(true) {}
 
 void LeafNode::CalculateHash(const string &value) {
-  hash_ = HashFunction(key_ + value);
+  // hash_ = HashFunction(key_ + value);
+  hash_ = HashFunction(value);
 }
 
 /* serialized leaf node format (size in bytes):
@@ -150,7 +158,8 @@ void LeafNode::UpdateNode(uint64_t version,
   if (value == "") {  // value是空字符串代表Delete节点，此时将哈希改为空串
     hash_ = "";
   } else {
-    hash_ = HashFunction(key_ + value);
+    // hash_ = HashFunction(key_ + value);
+    hash_ = HashFunction(value);
   }
 
   if (deltapage != nullptr) {
@@ -1339,7 +1348,8 @@ DMMTrieProof DMMTrie::GetProof(uint64_t tid, uint64_t version,
 
 bool DMMTrie::Verify(uint64_t tid, const string &key, const string &value,
                      string root_hash, DMMTrieProof proof) {
-  string hash = HashFunction(key + value);
+  // string hash = HashFunction(key + value);
+  string hash = HashFunction(value);
   for (const auto &node_proof : proof.proofs) {
     string concatenated_hash;
     for (int i = 0; i < DMM_NODE_FANOUT; i++) {
@@ -1368,7 +1378,8 @@ string DMMTrie::RecursiveVerify(PageKey pagekey) {
     // first level is indexnode
     string value = value_store_->ReadValue(
         static_cast<LeafNode *>(page->GetRoot())->GetLocation());
-    return HashFunction(pagekey.pid + value);
+    // return HashFunction(pagekey.pid + value);
+    return HashFunction(value);
   }
 
   string concatenated_hash;
@@ -1393,7 +1404,8 @@ string DMMTrie::RecursiveVerify(PageKey pagekey) {
     } else {
       string value = value_store_->ReadValue(
           static_cast<LeafNode *>(child)->GetLocation());
-      concatenated_hash += HashFunction(pagekey.pid + to_string(i) + value);
+      // concatenated_hash += HashFunction(pagekey.pid + to_string(i) + value);
+      concatenated_hash += HashFunction(value);
     }
   }
   return HashFunction(concatenated_hash);

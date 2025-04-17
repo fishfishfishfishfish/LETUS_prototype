@@ -111,7 +111,7 @@ LetusProofPath* LetusProof(Letus* p, uint64_t tid, uint64_t version,
   int proof_size = proof.proofs.size();
   LetusProofNode* proof_nodes = new LetusProofNode[proof_size];
 
-  string hash = HashFunction(key + value);
+  string hash = HashFunction(value);
   for (int i = 0; i < proof_size; ++i) {
     int nibble_size = proof_size - i;
     proof_nodes[i].index = nibble_size - 1;
