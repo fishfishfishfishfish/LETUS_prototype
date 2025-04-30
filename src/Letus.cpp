@@ -77,9 +77,21 @@ bool LetusRevert(Letus* p, uint64_t tid, uint64_t version) {
   return true;
 }
 bool LetusCalcRootHash(Letus* p, uint64_t tid, uint64_t version) {
-  p->trie->Commit(version);
+  p->trie->CalcRootHash(tid, version);
   // [TODO] replace to CalcRootHash
   return true;
+}
+
+char* LetusGetRootHash(Letus* p, uint64_t tid, uint64_t version) {
+  std::string hash = p->trie->GetRootHash(tid, version);
+  size_t hash_size = hash.size();
+  char* hash_c = new char[hash_size + 1];
+  hash.copy(hash_c, hash_size, 0);
+  hash_c[hash_size] = '\0';
+#ifdef DEBUG
+  std::cout << "value: " << hash << "," << hash_c << std::endl;
+#endif
+  return hash_c;
 }
 
 bool LetusFlush(Letus* p, uint64_t tid, uint64_t version) {
@@ -99,7 +111,7 @@ LetusProofPath* LetusProof(Letus* p, uint64_t tid, uint64_t version,
   int proof_size = proof.proofs.size();
   LetusProofNode* proof_nodes = new LetusProofNode[proof_size];
 
-  string hash = HashFunction(key + value);
+  string hash = HashFunction(value);
   for (int i = 0; i < proof_size; ++i) {
     int nibble_size = proof_size - i;
     proof_nodes[i].index = nibble_size - 1;

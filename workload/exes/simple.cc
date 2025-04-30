@@ -25,7 +25,7 @@ int main() {
   LSVPS* page_store = new LSVPS();
   std::string data_path;
   // data_path = "/Users/ldz/Code/miniLETUS/data/";//your own path
-  data_path = "/home/xinyu.chen/LETUS_prototype/data";
+  data_path = "./data";
   VDLS* value_store = new VDLS(data_path);
   DMMTrie* trie = new DMMTrie(0, page_store, value_store);
   page_store->RegisterTrie(trie);
@@ -48,6 +48,8 @@ int main() {
        << trie->Verify(0, make_key("12345"), "aaa", root_hash2, proof) << endl;
   cout << boolalpha
        << trie->Verify(0, make_key("12345"), "bbb", root_hash2, proof) << endl;
+  cout << boolalpha
+       << trie->Verify(0, make_key("12345"), "aaa", root_hash1, proof) << endl;
   cout << boolalpha << trie->Verify(0, 1, root_hash1) << endl;
 
   cout << boolalpha << trie->Verify(0, 1, root_hash1)
