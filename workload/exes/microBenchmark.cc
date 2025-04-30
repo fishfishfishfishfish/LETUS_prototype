@@ -1,17 +1,17 @@
-#include <sys/time.h>
-#include <unistd.h>
-
 #include <chrono>
 #include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
 
 #include "DMMTrie.hpp"
 #include "LSVPS.hpp"
 #include "generator.hpp"
 
-inline char RandomPrintChar() { return rand() % 94 + 33; }
+inline char RandomPrintChar(uint64_t num) {
+  static const char charset[] =
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+  return charset[num % (sizeof(charset) - 1)];
+}
 
 std::string BuildKeyName(uint64_t key_num, int key_len) {
   std::string key_num_str = std::to_string(key_num);
@@ -22,18 +22,18 @@ std::string BuildKeyName(uint64_t key_num, int key_len) {
 }
 
 int main(int argc, char** argv) {
-  int num_accout = 500000000;  // 40,000,000(40M) 2,000,000(2M)
-  int load_batch_size = 5000;
-  int num_txn_version = 10;
-  int txn_batch_size = 600;
-  int key_len = 9;
-  int value_len = 10;
+  uint64_t num_accout = 5000;  // 40,000,000(40M) 2,000,000(2M)
+  uint64_t load_batch_size = 100;
+  uint64_t num_txn_version = 10;
+  uint64_t txn_batch_size = 50;
+  uint64_t key_len = 32;
+  uint64_t value_len = 1024;
   std::string data_path = "data/";
   std::string index_path = "index";
   std::string result_path = "exps/results/test.csv";
 
   int opt;
-  while ((opt = getopt(argc, argv, "a:b:t:z:k:v:d:i:r:")) != -1) {
+  while ((opt = getopt(argc, argv, "a:b:t:z:k:v:l:d:i:r:")) != -1) {
     switch (opt) {
       case 'a':  // num_accout
       {
@@ -121,100 +121,108 @@ int main(int argc, char** argv) {
         break;
     }
   }
-
   // init database
+  // timeout = 100ms, the time between update the tree
   LSVPS* page_store = new LSVPS(index_path);
   VDLS* value_store = new VDLS(data_path);
   DMMTrie* trie = new DMMTrie(0, page_store, value_store);
   page_store->RegisterTrie(trie);
+
   // prepare result file
-  ofstream rs_file;
-  rs_file.open(result_path, ios::trunc);
-  rs_file << "version,get_latency,put_latency,get_throughput,put_throughput"
-          << std::endl;
+  std::ofstream rs_file;
+  rs_file.open(result_path, std::ios::trunc);
+  rs_file << "version,operation,latency,throughput" << std::endl;
   rs_file.close();
-  rs_file.open(result_path, ios::app);
+  rs_file.open(result_path, std::ios::app);
 
   // load data
   key_len += key_len % 2 ? 0 : 1;  // make sure key_len is odd
-  int num_load_version = num_accout / load_batch_size;
-  int version = 1;
+  uint64_t num_load_version = num_accout / load_batch_size;
+  uint64_t version = 0;
   CounterGenerator key_generator(1);
   for (; version <= num_load_version; version++) {
-    auto start = chrono::system_clock::now();
-    for (int i = 0; i < load_batch_size; i++) {
-      std::string key = BuildKeyName(key_generator.Next(), key_len);
-      std::string val = std::to_string(10);
+    auto start = std::chrono::system_clock::now();
+    for (int i = 0; i < int(load_batch_size); i++) {
+      uint64_t num = key_generator.Next();
+      std::string key = BuildKeyName(num, key_len);
+      std::string val = "";
+      val = val.append(value_len, RandomPrintChar(num));
       trie->Put(0, version, key, val);
     }
     trie->Commit(version);
-    auto end = chrono::system_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    auto end = std::chrono::system_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     double load_latency = double(duration.count()) *
-                          chrono::microseconds::period::num /
-                          chrono::microseconds::period::den;
-    if (version % 200 == 0) {
+                          std::chrono::nanoseconds::period::num /
+                          std::chrono::nanoseconds::period::den;
+    if (version % 1 == 0) {
       std::cout << "version " << version << ", load latnecy:" << load_latency
-                << ","
-                << "load throughput:" << load_batch_size / load_latency
+                << ", load throughput:" << load_batch_size / load_latency
                 << std::endl;
+      rs_file << version << ",LOAD," << load_latency << ","
+              << load_batch_size / load_latency << std::endl;
     }
+  }
+  sleep(1);
+
+  int num_txn = num_txn_version * txn_batch_size * 2;
+  uint64_t random_keys[num_txn];
+  UniformGenerator txn_key_generator(1, num_accout);
+  for (int i = 0; i < num_txn; i++) {
+    random_keys[i] = txn_key_generator.Next();
   }
 
-  std::cout << "load " << num_accout << " accounts, current version is "
-            << version << std::endl;
-  // transaction
-  int num_txn = num_txn_version * txn_batch_size;
-  int random_keys[num_txn];
-  UniformGenerator active_judger(0, 1000);  // if access active accounts
-  UniformGenerator active_key_generator(num_accout * 0.8, num_accout);
-  UniformGenerator inactive_key_generator(1, num_accout * 0.8);
-  for (int i = 0; i < num_txn; i++) {
-    if (active_judger.Next() < 800) {
-      random_keys[i] = active_key_generator.Next();
-    } else {
-      random_keys[i] = inactive_key_generator.Next();
-    }
-  }
+  // updates
   int txn_key_id = 0;
   for (; version <= num_load_version + num_txn_version; version++) {
-    // test get
-    auto start = chrono::system_clock::now();
-    for (int i = 0; i < txn_batch_size; i++) {
-      std::string key = BuildKeyName(random_keys[txn_key_id + i], key_len);
-      DMMTrieProof proof_send = trie->GetProof(0, version - 1, key);
-    }
-    auto end = chrono::system_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
-    double get_latency = double(duration.count()) *
-                         chrono::microseconds::period::num /
-                         chrono::microseconds::period::den;
-    std::cout << "version " << version << " get latnecy:" << get_latency << ","
-              << "get throughput:" << txn_batch_size / get_latency << std::endl;
-    // test put
-    start = chrono::system_clock::now();
-    for (int i = 0; i < txn_batch_size; i++) {
-      std::string key = BuildKeyName(random_keys[txn_key_id + i], key_len);
+    auto start = std::chrono::system_clock::now();
+    for (int i = 0; i < int(txn_batch_size); i++) {
+      uint64_t num = random_keys[txn_key_id];
+      std::string key = BuildKeyName(num, key_len);
       std::string val = "";
-      val = val.append(value_len, RandomPrintChar());
+      val = val.append(value_len, RandomPrintChar(num));
       trie->Put(0, version, key, val);
+      txn_key_id++;
     }
     trie->Commit(version);
-    end = chrono::system_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    auto end = std::chrono::system_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     double put_latency = double(duration.count()) *
-                         chrono::microseconds::period::num /
-                         chrono::microseconds::period::den;
-    std::cout << "version " << version << " put latnecy:" << put_latency << ","
+                         std::chrono::nanoseconds::period::num /
+                         std::chrono::nanoseconds::period::den;
+    std::cout << "version " << version << ", put latnecy:" << put_latency << ","
               << "put throughput:" << txn_batch_size / put_latency << std::endl;
-    txn_key_id += txn_batch_size;
-
-    rs_file << version << "," << get_latency << "," << put_latency << ","
-            << txn_batch_size / get_latency << ","
+    rs_file << version << ",PUT," << put_latency << ","
             << txn_batch_size / put_latency << std::endl;
   }
-  std::cout << "process " << num_txn << " get, current version is " << version
-            << std::endl;
+
+  version -= 1;  // the follows are all reads and query the latest version
+  // gets
+  for (int t = 0; t < int(num_txn_version); t++) {
+    // test get
+    auto start = std::chrono::system_clock::now();
+    // get_keys.insert(std::make_pair(version, std::vector<std::string>()));
+    for (int i = 0; i < int(txn_batch_size); i++) {
+      std::string key = BuildKeyName(random_keys[txn_key_id], key_len);
+      trie->Get(0, version, key);
+      txn_key_id++;
+    }
+    auto end = std::chrono::system_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    double get_latency = double(duration.count()) *
+                         std::chrono::nanoseconds::period::num /
+                         std::chrono::nanoseconds::period::den;
+    std::cout << "version " << version << ", get latnecy:" << get_latency << ","
+              << "get throughput:" << txn_batch_size / get_latency << std::endl;
+    rs_file << version << ",GET," << get_latency << ","
+            << txn_batch_size / get_latency << std::endl;
+  }
+
+  std::cout << "finished" << std::endl;
   rs_file.close();
-  return true;
+
+  return 0;
 }

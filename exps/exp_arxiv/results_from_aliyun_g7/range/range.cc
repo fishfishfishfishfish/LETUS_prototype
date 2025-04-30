@@ -166,22 +166,23 @@ int main(int argc, char** argv) {
   // transaction
   UniformGenerator uni_keygen(1, num_accout);
   int txn_key_id = 0;
-  int range [] = {5, 50, 100, 200, 300, 400, 500, 1000, 2000};
-  for(int r = 0; r < 9; r++){
+  int range[] = {5, 50, 100, 200, 300, 400, 500, 1000, 2000};
+  for (int r = 0; r < 9; r++) {
     auto start = chrono::system_clock::now();
     int k = uni_keygen.Next();
-    for(int ri = 0; ri < r; ri++){
+    for (int ri = 0; ri < r; ri++) {  // it is wrong
       std::string key = BuildKeyName(k, key_len);
-      trie->Get(0, version-1, key);
+      trie->Get(0, version - 1, key);
       k++;
     }
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
     double get_latency = double(duration.count()) *
-                        chrono::microseconds::period::num /
-                      chrono::microseconds::period::den;
-    std::cout << "version " << version << " range size:" << r << " get latnecy:" << get_latency << ","
-            << "get throughput:" << txn_batch_size / get_latency << std::endl;     
+                         chrono::microseconds::period::num /
+                         chrono::microseconds::period::den;
+    std::cout << "version " << version << " range size:" << r
+              << " get latnecy:" << get_latency << ","
+              << "get throughput:" << txn_batch_size / get_latency << std::endl;
   }
   rs_file.close();
   return true;

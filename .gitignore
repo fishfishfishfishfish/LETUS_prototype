@@ -55,8 +55,8 @@ build_release/
 IndexFile/
 bak/
 data/
-exps/results/
-results/
+index/
+results*/
 FlameGraph/
 
 !exps/exp_arxiv/
