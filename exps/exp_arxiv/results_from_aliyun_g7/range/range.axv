@@ -1,0 +1,328 @@
+data_path: /root/LETUS_prototype/exps/../data/
+index_path: /root/LETUS_prototype/exps/../index
++ rm -rf /root/LETUS_prototype/exps/../data/
++ mkdir -p /root/LETUS_prototype/exps/../data/
++ rm -rf path
++ mkdir -p /root/LETUS_prototype/exps/../index
++ result_path=/root/LETUS_prototype/exps/results/range/acc1000000b8000v800.csv
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo 2025-04-18 16:26:53
+2025-04-18 16:26:53
++ echo 'num account: 1000000, batch_size: 8000, value_size: 800, key_size: 65'
+num account: 1000000, batch_size: 8000, value_size: 800, key_size: 65
++ ../build_release/bin/range -a 1000000 -b 20000 -t 20 -z 8000 -k 65 -v 800 -d /root/LETUS_prototype/exps/../data/ -i /root/LETUS_prototype/exps/../index -r /root/LETUS_prototype/exps/results/range/acc1000000b8000v800.csv
+version 5, load latnecy:0.165174,load throughput:121084
+version 10, load latnecy:0.166517,load throughput:120108
+version 15, load latnecy:0.167336,load throughput:119520
+version 20, load latnecy:0.16881,load throughput:118476
+version 25, load latnecy:0.169479,load throughput:118009
+version 30, load latnecy:0.169603,load throughput:117922
+version 35, load latnecy:0.170467,load throughput:117325
+version 40, load latnecy:0.170852,load throughput:117060
+version 45, load latnecy:0.17169,load throughput:116489
+version 50, load latnecy:0.171141,load throughput:116863
+load 1000000 accounts, current version is 51
+version 51 range size:0 get latnecy:5.6e-05,get throughput:1.42857e+08
+version 51 range size:1 get latnecy:0.000164,get throughput:4.87805e+07
+version 51 range size:2 get latnecy:0.000326,get throughput:2.45399e+07
+version 51 range size:3 get latnecy:0.000595,get throughput:1.34454e+07
+version 51 range size:4 get latnecy:0.000877,get throughput:9.12201e+06
+version 51 range size:5 get latnecy:0.001192,get throughput:6.71141e+06
+version 51 range size:6 get latnecy:0.001459,get throughput:5.48321e+06
+version 51 range size:7 get latnecy:0.002907,get throughput:2.75198e+06
+version 51 range size:8 get latnecy:0.005786,get throughput:1.38265e+06
++ sleep 5
++ set +x
++ rm -rf /root/LETUS_prototype/exps/../data/
++ mkdir -p /root/LETUS_prototype/exps/../data/
++ rm -rf path
++ mkdir -p /root/LETUS_prototype/exps/../index
++ result_path=/root/LETUS_prototype/exps/results/range/acc10000000b8000v800.csv
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo 2025-04-18 16:27:07
+2025-04-18 16:27:07
++ echo 'num account: 10000000, batch_size: 8000, value_size: 800, key_size: 65'
+num account: 10000000, batch_size: 8000, value_size: 800, key_size: 65
++ ../build_release/bin/range -a 10000000 -b 20000 -t 20 -z 8000 -k 65 -v 800 -d /root/LETUS_prototype/exps/../data/ -i /root/LETUS_prototype/exps/../index -r /root/LETUS_prototype/exps/results/range/acc10000000b8000v800.csv
+version 5, load latnecy:0.166322,load throughput:120249
+version 10, load latnecy:0.167843,load throughput:119159
+version 15, load latnecy:0.169853,load throughput:117749
+version 20, load latnecy:0.17028,load throughput:117454
+version 25, load latnecy:0.170045,load throughput:117616
+version 30, load latnecy:0.171432,load throughput:116664
+version 35, load latnecy:0.172136,load throughput:116187
+version 40, load latnecy:0.173893,load throughput:115013
+version 45, load latnecy:0.171199,load throughput:116823
+version 50, load latnecy:0.171811,load throughput:116407
+version 55, load latnecy:0.172466,load throughput:115965
+version 60, load latnecy:0.171769,load throughput:116435
+version 65, load latnecy:0.173266,load throughput:115429
+version 70, load latnecy:0.173104,load throughput:115537
+version 75, load latnecy:0.172645,load throughput:115845
+version 80, load latnecy:0.173946,load throughput:114978
+version 85, load latnecy:0.174614,load throughput:114538
+version 90, load latnecy:0.171858,load throughput:116375
+version 95, load latnecy:0.171862,load throughput:116372
+version 100, load latnecy:0.172538,load throughput:115916
+version 105, load latnecy:0.173737,load throughput:115117
+version 110, load latnecy:0.172344,load throughput:116047
+version 115, load latnecy:0.173749,load throughput:115109
+version 120, load latnecy:0.173357,load throughput:115369
+version 125, load latnecy:0.172848,load throughput:115709
+version 130, load latnecy:0.174077,load throughput:114892
+version 135, load latnecy:0.173224,load throughput:115457
+version 140, load latnecy:0.268564,load throughput:74470.1
+version 145, load latnecy:0.174215,load throughput:114801
+version 150, load latnecy:0.172809,load throughput:115735
+version 155, load latnecy:0.172814,load throughput:115731
+version 160, load latnecy:0.177398,load throughput:112741
+version 165, load latnecy:0.175161,load throughput:114181
+version 170, load latnecy:0.174445,load throughput:114649
+version 175, load latnecy:0.172261,load throughput:116103
+version 180, load latnecy:0.174504,load throughput:114611
+version 185, load latnecy:0.173841,load throughput:115048
+version 190, load latnecy:0.172868,load throughput:115695
+version 195, load latnecy:0.17304,load throughput:115580
+version 200, load latnecy:0.173007,load throughput:115602
+version 205, load latnecy:0.173344,load throughput:115378
+version 210, load latnecy:0.172454,load throughput:115973
+version 215, load latnecy:0.174553,load throughput:114578
+version 220, load latnecy:0.17416,load throughput:114837
+version 225, load latnecy:0.173215,load throughput:115463
+version 230, load latnecy:0.172637,load throughput:115850
+version 235, load latnecy:0.175201,load throughput:114155
+version 240, load latnecy:0.174875,load throughput:114367
+version 245, load latnecy:0.174401,load throughput:114678
+version 250, load latnecy:0.173941,load throughput:114982
+version 255, load latnecy:0.176215,load throughput:113498
+version 260, load latnecy:0.174079,load throughput:114890
+version 265, load latnecy:0.172985,load throughput:115617
+version 270, load latnecy:0.173236,load throughput:115449
+version 275, load latnecy:0.173918,load throughput:114997
+version 280, load latnecy:0.175983,load throughput:113647
+version 285, load latnecy:0.174842,load throughput:114389
+version 290, load latnecy:0.175513,load throughput:113952
+version 295, load latnecy:0.176366,load throughput:113401
+version 300, load latnecy:0.174491,load throughput:114619
+version 305, load latnecy:0.175264,load throughput:114114
+version 310, load latnecy:0.174237,load throughput:114786
+version 315, load latnecy:0.175911,load throughput:113694
+version 320, load latnecy:0.175792,load throughput:113771
+version 325, load latnecy:0.175806,load throughput:113762
+version 330, load latnecy:0.175578,load throughput:113909
+version 335, load latnecy:0.176581,load throughput:113262
+version 340, load latnecy:0.17443,load throughput:114659
+version 345, load latnecy:0.175261,load throughput:114116
+version 350, load latnecy:0.176391,load throughput:113384
+version 355, load latnecy:0.174134,load throughput:114854
+version 360, load latnecy:0.17245,load throughput:115976
+version 365, load latnecy:0.17449,load throughput:114620
+version 370, load latnecy:0.541348,load throughput:36944.8
+version 375, load latnecy:0.174929,load throughput:114332
+version 380, load latnecy:0.173739,load throughput:115115
+version 385, load latnecy:0.173067,load throughput:115562
+version 390, load latnecy:0.174554,load throughput:114578
+version 395, load latnecy:0.174592,load throughput:114553
+version 400, load latnecy:0.173862,load throughput:115034
+version 405, load latnecy:0.175193,load throughput:114160
+version 410, load latnecy:0.175307,load throughput:114086
+version 415, load latnecy:0.174122,load throughput:114862
+version 420, load latnecy:0.173299,load throughput:115407
+version 425, load latnecy:0.174293,load throughput:114749
+version 430, load latnecy:0.175935,load throughput:113678
+version 435, load latnecy:0.17453,load throughput:114593
+version 440, load latnecy:0.17454,load throughput:114587
+version 445, load latnecy:0.174441,load throughput:114652
+version 450, load latnecy:0.175589,load throughput:113902
+version 455, load latnecy:0.174949,load throughput:114319
+version 460, load latnecy:0.174848,load throughput:114385
+version 465, load latnecy:0.176573,load throughput:113268
+version 470, load latnecy:0.174767,load throughput:114438
+version 475, load latnecy:0.174947,load throughput:114320
+version 480, load latnecy:0.175648,load throughput:113864
+version 485, load latnecy:0.177264,load throughput:112826
+version 490, load latnecy:0.176202,load throughput:113506
+version 495, load latnecy:0.174471,load throughput:114632
+version 500, load latnecy:0.175372,load throughput:114043
+load 10000000 accounts, current version is 501
+version 501 range size:0 get latnecy:5.8e-05,get throughput:1.37931e+08
+version 501 range size:1 get latnecy:0.00017,get throughput:4.70588e+07
+version 501 range size:2 get latnecy:0.000317,get throughput:2.52366e+07
+version 501 range size:3 get latnecy:0.000594,get throughput:1.3468e+07
+version 501 range size:4 get latnecy:0.000877,get throughput:9.12201e+06
+version 501 range size:5 get latnecy:0.001154,get throughput:6.93241e+06
+version 501 range size:6 get latnecy:0.001458,get throughput:5.48697e+06
+version 501 range size:7 get latnecy:0.002902,get throughput:2.75672e+06
+version 501 range size:8 get latnecy:0.005743,get throughput:1.393e+06
++ sleep 5
++ set +x
++ rm -rf /root/LETUS_prototype/exps/../data/
++ mkdir -p /root/LETUS_prototype/exps/../data/
++ rm -rf path
++ mkdir -p /root/LETUS_prototype/exps/../index
++ result_path=/root/LETUS_prototype/exps/results/range/acc4000000b8000v800.csv
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo 2025-04-18 16:28:43
+2025-04-18 16:28:43
++ echo 'num account: 4000000, batch_size: 8000, value_size: 800, key_size: 65'
+num account: 4000000, batch_size: 8000, value_size: 800, key_size: 65
++ ../build_release/bin/range -a 4000000 -b 20000 -t 20 -z 8000 -k 65 -v 800 -d /root/LETUS_prototype/exps/../data/ -i /root/LETUS_prototype/exps/../index -r /root/LETUS_prototype/exps/results/range/acc4000000b8000v800.csv
+version 5, load latnecy:0.167561,load throughput:119360
+version 10, load latnecy:0.168463,load throughput:118720
+version 15, load latnecy:0.169002,load throughput:118342
+version 20, load latnecy:0.169239,load throughput:118176
+version 25, load latnecy:0.169915,load throughput:117706
+version 30, load latnecy:0.170027,load throughput:117628
+version 35, load latnecy:0.170696,load throughput:117167
+version 40, load latnecy:0.170662,load throughput:117191
+version 45, load latnecy:0.169462,load throughput:118021
+version 50, load latnecy:0.169786,load throughput:117795
+version 55, load latnecy:0.170144,load throughput:117547
+version 60, load latnecy:0.169617,load throughput:117913
+version 65, load latnecy:0.170818,load throughput:117084
+version 70, load latnecy:0.169424,load throughput:118047
+version 75, load latnecy:0.169859,load throughput:117745
+version 80, load latnecy:0.171523,load throughput:116602
+version 85, load latnecy:0.172449,load throughput:115976
+version 90, load latnecy:0.168811,load throughput:118476
+version 95, load latnecy:0.169728,load throughput:117836
+version 100, load latnecy:0.170483,load throughput:117314
+version 105, load latnecy:0.171441,load throughput:116658
+version 110, load latnecy:0.170173,load throughput:117527
+version 115, load latnecy:0.170801,load throughput:117095
+version 120, load latnecy:0.172237,load throughput:116119
+version 125, load latnecy:0.170158,load throughput:117538
+version 130, load latnecy:0.171005,load throughput:116956
+version 135, load latnecy:0.170862,load throughput:117054
+version 140, load latnecy:0.268154,load throughput:74584
+version 145, load latnecy:0.171137,load throughput:116865
+version 150, load latnecy:0.170458,load throughput:117331
+version 155, load latnecy:0.170804,load throughput:117093
+version 160, load latnecy:0.173259,load throughput:115434
+version 165, load latnecy:0.172305,load throughput:116073
+version 170, load latnecy:0.172329,load throughput:116057
+version 175, load latnecy:0.169441,load throughput:118035
+version 180, load latnecy:0.171955,load throughput:116309
+version 185, load latnecy:0.172408,load throughput:116004
+version 190, load latnecy:0.170786,load throughput:117106
+version 195, load latnecy:0.170465,load throughput:117326
+version 200, load latnecy:0.172724,load throughput:115792
+load 4000000 accounts, current version is 201
+version 201 range size:0 get latnecy:7.7e-05,get throughput:1.03896e+08
+version 201 range size:1 get latnecy:0.000171,get throughput:4.67836e+07
+version 201 range size:2 get latnecy:0.000297,get throughput:2.6936e+07
+version 201 range size:3 get latnecy:0.000586,get throughput:1.36519e+07
+version 201 range size:4 get latnecy:0.000857,get throughput:9.33489e+06
+version 201 range size:5 get latnecy:0.001146,get throughput:6.9808e+06
+version 201 range size:6 get latnecy:0.001416,get throughput:5.64972e+06
+version 201 range size:7 get latnecy:0.002854,get throughput:2.80308e+06
+version 201 range size:8 get latnecy:0.00568,get throughput:1.40845e+06
++ sleep 5
++ set +x
++ rm -rf /root/LETUS_prototype/exps/../data/
++ mkdir -p /root/LETUS_prototype/exps/../data/
++ rm -rf path
++ mkdir -p /root/LETUS_prototype/exps/../index
++ result_path=/root/LETUS_prototype/exps/results/range/acc8000000b8000v800.csv
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo 2025-04-18 16:29:23
+2025-04-18 16:29:23
++ echo 'num account: 8000000, batch_size: 8000, value_size: 800, key_size: 65'
+num account: 8000000, batch_size: 8000, value_size: 800, key_size: 65
++ ../build_release/bin/range -a 8000000 -b 20000 -t 20 -z 8000 -k 65 -v 800 -d /root/LETUS_prototype/exps/../data/ -i /root/LETUS_prototype/exps/../index -r /root/LETUS_prototype/exps/results/range/acc8000000b8000v800.csv
+version 5, load latnecy:0.168896,load throughput:118416
+version 10, load latnecy:0.167938,load throughput:119092
+version 15, load latnecy:0.169626,load throughput:117906
+version 20, load latnecy:0.169141,load throughput:118245
+version 25, load latnecy:0.16932,load throughput:118120
+version 30, load latnecy:0.170697,load throughput:117167
+version 35, load latnecy:0.170517,load throughput:117290
+version 40, load latnecy:0.171761,load throughput:116441
+version 45, load latnecy:0.169942,load throughput:117687
+version 50, load latnecy:0.171347,load throughput:116722
+version 55, load latnecy:0.171442,load throughput:116658
+version 60, load latnecy:0.171436,load throughput:116662
+version 65, load latnecy:0.173584,load throughput:115218
+version 70, load latnecy:0.172255,load throughput:116107
+version 75, load latnecy:0.171844,load throughput:116385
+version 80, load latnecy:0.171137,load throughput:116865
+version 85, load latnecy:0.172727,load throughput:115790
+version 90, load latnecy:0.17065,load throughput:117199
+version 95, load latnecy:0.170753,load throughput:117128
+version 100, load latnecy:0.172446,load throughput:115978
+version 105, load latnecy:0.172128,load throughput:116193
+version 110, load latnecy:0.170449,load throughput:117337
+version 115, load latnecy:0.171941,load throughput:116319
+version 120, load latnecy:0.171531,load throughput:116597
+version 125, load latnecy:0.171396,load throughput:116689
+version 130, load latnecy:0.171001,load throughput:116958
+version 135, load latnecy:0.172777,load throughput:115756
+version 140, load latnecy:0.275701,load throughput:72542.4
+version 145, load latnecy:0.171379,load throughput:116700
+version 150, load latnecy:0.171567,load throughput:116573
+version 155, load latnecy:0.172017,load throughput:116268
+version 160, load latnecy:0.172838,load throughput:115715
+version 165, load latnecy:0.17236,load throughput:116036
+version 170, load latnecy:0.17267,load throughput:115828
+version 175, load latnecy:0.170095,load throughput:117581
+version 180, load latnecy:0.172954,load throughput:115638
+version 185, load latnecy:0.172318,load throughput:116064
+version 190, load latnecy:0.1714,load throughput:116686
+version 195, load latnecy:0.171347,load throughput:116722
+version 200, load latnecy:0.17292,load throughput:115660
+version 205, load latnecy:0.170684,load throughput:117176
+version 210, load latnecy:0.171299,load throughput:116755
+version 215, load latnecy:0.173455,load throughput:115304
+version 220, load latnecy:0.171715,load throughput:116472
+version 225, load latnecy:0.170978,load throughput:116974
+version 230, load latnecy:0.171568,load throughput:116572
+version 235, load latnecy:0.17355,load throughput:115241
+version 240, load latnecy:0.173935,load throughput:114985
+version 245, load latnecy:0.172134,load throughput:116189
+version 250, load latnecy:0.171256,load throughput:116784
+version 255, load latnecy:0.174159,load throughput:114838
+version 260, load latnecy:0.171501,load throughput:116617
+version 265, load latnecy:0.171442,load throughput:116658
+version 270, load latnecy:0.171734,load throughput:116459
+version 275, load latnecy:0.172409,load throughput:116003
+version 280, load latnecy:0.175267,load throughput:114112
+version 285, load latnecy:0.172685,load throughput:115818
+version 290, load latnecy:0.172257,load throughput:116106
+version 295, load latnecy:0.174542,load throughput:114586
+version 300, load latnecy:0.172648,load throughput:115843
+version 305, load latnecy:0.172577,load throughput:115890
+version 310, load latnecy:0.173022,load throughput:115592
+version 315, load latnecy:0.174673,load throughput:114500
+version 320, load latnecy:0.174373,load throughput:114697
+version 325, load latnecy:0.173066,load throughput:115563
+version 330, load latnecy:0.172928,load throughput:115655
+version 335, load latnecy:0.173742,load throughput:115113
+version 340, load latnecy:0.172694,load throughput:115812
+version 345, load latnecy:0.17447,load throughput:114633
+version 350, load latnecy:0.174321,load throughput:114731
+version 355, load latnecy:0.173744,load throughput:115112
+version 360, load latnecy:0.170966,load throughput:116982
+version 365, load latnecy:0.172341,load throughput:116049
+version 370, load latnecy:0.264965,load throughput:75481.7
+version 375, load latnecy:0.172376,load throughput:116025
+version 380, load latnecy:0.171036,load throughput:116934
+version 385, load latnecy:0.171272,load throughput:116773
+version 390, load latnecy:0.172399,load throughput:116010
+version 395, load latnecy:0.171082,load throughput:116903
+version 400, load latnecy:0.171745,load throughput:116452
+load 8000000 accounts, current version is 401
+version 401 range size:0 get latnecy:5.9e-05,get throughput:1.35593e+08
+version 401 range size:1 get latnecy:0.000184,get throughput:4.34783e+07
+version 401 range size:2 get latnecy:0.000318,get throughput:2.51572e+07
+version 401 range size:3 get latnecy:0.000607,get throughput:1.31796e+07
+version 401 range size:4 get latnecy:0.000897,get throughput:8.91862e+06
+version 401 range size:5 get latnecy:0.001196,get throughput:6.68896e+06
+version 401 range size:6 get latnecy:0.001493,get throughput:5.35834e+06
+version 401 range size:7 get latnecy:0.002958,get throughput:2.70453e+06
+version 401 range size:8 get latnecy:0.005864,get throughput:1.36426e+06
++ sleep 5
++ set +x
+Traceback (most recent call last):
+  File "/root/LETUS_prototype/exps/plot.py", line 3, in <module>
+    import pandas as pd
+ModuleNotFoundError: No module named 'pandas'

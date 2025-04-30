@@ -1091,7 +1091,7 @@ string DMMTrie::Get(uint64_t tid, uint64_t version, const string &key) {
 
     if (!page->GetRoot()->IsLeaf()) {  // first level in page is indexnode
       if (!page->GetRoot()->HasChild(GetIndex(nibble_path[i]))) {
-        cout << "child not found" << endl;
+        cout << "Child not found" << endl;
         cout << "Key " << key << " not found at version " << version << endl;
         return "";
       }

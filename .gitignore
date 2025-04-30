@@ -58,3 +58,5 @@ data/
 exps/results/
 results/
 FlameGraph/
+
+!exps/exp_arxiv/
