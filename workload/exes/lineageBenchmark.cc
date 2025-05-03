@@ -24,23 +24,24 @@ std::string BuildKeyName(uint64_t key_num, int key_len) {
 int main(int argc, char** argv) {
   uint64_t num_accout = 5000;  // 40,000,000(40M) 2,000,000(2M)
   uint64_t load_batch_size = 100;
-  uint64_t num_txn_version = 10;
-  uint64_t txn_batch_size = 50;
+  uint64_t num_txn_version = 0;
+  uint64_t num_txn_account = 50;
   uint64_t key_len = 32;
   uint64_t value_len = 1024;
+  std::vector<size_t> query_versions = {2, 4, 10, 20, 40};
   std::string data_path = "data/";
   std::string index_path = "index";
   std::string result_path = "exps/results/test.csv";
 
   int opt;
-  while ((opt = getopt(argc, argv, "a:b:t:z:k:v:l:d:i:r:")) != -1) {
+  while ((opt = getopt(argc, argv, "a:b:t:z:p:k:v:l:d:i:r:")) != -1) {
     switch (opt) {
       case 'a':  // num_accout
       {
         char* strtolPtr;
         num_accout = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') || (num_accout <= 0)) {
-          std::cerr << "option -b requires a numeric arg\n" << std::endl;
+          std::cerr << "option -a requires a numeric arg\n" << std::endl;
         }
         break;
       }
@@ -51,7 +52,7 @@ int main(int argc, char** argv) {
         load_batch_size = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') ||
             (load_batch_size <= 0)) {
-          std::cerr << "option -n requires a numeric arg\n" << std::endl;
+          std::cerr << "option -b requires a numeric arg\n" << std::endl;
         }
         break;
       }
@@ -61,19 +62,19 @@ int main(int argc, char** argv) {
         char* strtolPtr;
         num_txn_version = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') ||
-            (num_txn_version <= 0)) {
-          std::cerr << "option -k requires a numeric arg\n" << std::endl;
+            (num_txn_version < 0)) {
+          std::cerr << "option -t requires a numeric arg\n" << std::endl;
         }
         break;
       }
 
-      case 'z':  // txn_batch_size
+      case 'z':  // num_txn_account
       {
         char* strtolPtr;
-        txn_batch_size = strtoul(optarg, &strtolPtr, 10);
+        num_txn_account = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') ||
-            (txn_batch_size <= 0)) {
-          std::cerr << "option -k requires a numeric arg\n" << std::endl;
+            (num_txn_account <= 0)) {
+          std::cerr << "option -z requires a numeric arg\n" << std::endl;
         }
         break;
       }
@@ -94,6 +95,27 @@ int main(int argc, char** argv) {
         value_len = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') || (value_len <= 0)) {
           std::cerr << "option -v requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'l': {  // range for range query
+        std::string str = optarg;
+        std::stringstream ss(str);
+        std::string item;
+        query_versions.clear();
+        while (std::getline(ss, item, ',')) {
+          try {
+            query_versions.push_back(std::stoul(item));
+          } catch (const std::invalid_argument& e) {
+            std::cerr << "Invalid number format for option -l: " << item
+                      << std::endl;
+            return 1;
+          } catch (const std::out_of_range& e) {
+            std::cerr << "Number out of range for option -l: " << item
+                      << std::endl;
+            return 1;
+          }
         }
         break;
       }
@@ -163,26 +185,22 @@ int main(int argc, char** argv) {
               << load_batch_size / load_latency << std::endl;
     }
   }
-  sleep(1);
 
-  int num_txn = num_txn_version * txn_batch_size * 2;
-  uint64_t random_keys[num_txn];
+  uint64_t random_keys[num_txn_account];
   UniformGenerator txn_key_generator(1, num_accout);
-  for (int i = 0; i < num_txn; i++) {
+  for (int i = 0; i < num_txn_account; i++) {
     random_keys[i] = txn_key_generator.Next();
   }
 
   // updates
-  int txn_key_id = 0;
   for (; version <= num_load_version + num_txn_version; version++) {
     auto start = std::chrono::system_clock::now();
-    for (int i = 0; i < int(txn_batch_size); i++) {
-      uint64_t num = random_keys[txn_key_id];
+    for (int i = 0; i < int(num_txn_account); i++) {
+      uint64_t num = random_keys[i];
       std::string key = BuildKeyName(num, key_len);
       std::string val = "";
       val = val.append(value_len, RandomPrintChar(num));
       trie->Put(0, version, key, val);
-      txn_key_id++;
     }
     trie->Commit(version);
     auto end = std::chrono::system_clock::now();
@@ -192,34 +210,34 @@ int main(int argc, char** argv) {
                          std::chrono::nanoseconds::period::num /
                          std::chrono::nanoseconds::period::den;
     std::cout << "version " << version << ", put latnecy:" << put_latency << ","
-              << "put throughput:" << txn_batch_size / put_latency << std::endl;
+              << "put throughput:" << num_txn_account / put_latency
+              << std::endl;
     rs_file << version << ",PUT," << put_latency << ","
-            << txn_batch_size / put_latency << std::endl;
+            << num_txn_account / put_latency << std::endl;
   }
 
-  version -= 1;  // the follows are all reads and query the latest version
-  // gets
-  for (int t = 0; t < int(num_txn_version); t++) {
-    // test get
-    auto start = std::chrono::system_clock::now();
-    // get_keys.insert(std::make_pair(version, std::vector<std::string>()));
-    for (int i = 0; i < int(txn_batch_size); i++) {
-      std::string key = BuildKeyName(random_keys[txn_key_id], key_len);
-      trie->Get(0, version, key);
-      txn_key_id++;
+  // version get
+  uint64_t cur_version = version - 1;
+  for (size_t nv : query_versions) {
+    for (int t = 0; t < int(num_txn_account); t++) {
+      std::string key = BuildKeyName(random_keys[t], key_len);
+      std::map<uint64_t, std::vector<std::string>> keys;
+      auto start = std::chrono::system_clock::now();
+      for (size_t v = 0; v < nv; ++v) {
+        trie->GetProof(0, cur_version - v, key);
+      }
+      auto end = std::chrono::system_clock::now();
+      auto duration =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+      double get_latency = double(duration.count()) *
+                           std::chrono::nanoseconds::period::num /
+                           std::chrono::nanoseconds::period::den;
+      std::cout << "nv: " << nv << ", get latnecy:" << get_latency << ","
+                << "get throughput:" << nv / get_latency << std::endl;
+      rs_file << nv << ",GET," << get_latency << "," << nv / get_latency
+              << std::endl;
     }
-    auto end = std::chrono::system_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    double get_latency = double(duration.count()) *
-                         std::chrono::nanoseconds::period::num /
-                         std::chrono::nanoseconds::period::den;
-    std::cout << "version " << version << ", get latnecy:" << get_latency << ","
-              << "get throughput:" << txn_batch_size / get_latency << std::endl;
-    rs_file << version << ",GET," << get_latency << ","
-            << txn_batch_size / get_latency << std::endl;
   }
-
   std::cout << "finished" << std::endl;
   rs_file.close();
 

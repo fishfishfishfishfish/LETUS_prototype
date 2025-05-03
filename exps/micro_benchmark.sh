@@ -31,6 +31,8 @@ for n_acc in "${load_account[@]}"; do
             set -x
             # 清理数据文件夹
             rm -rf $data_path/*
+            rm -rf $index_path/*
+
             
             result_path="${result_dir}/e${n_acc}b${batch_size}v${value_size}.csv"
             echo $(date "+%Y-%m-%d %H:%M:%S") 
