@@ -23,7 +23,7 @@ mkdir -p $data_path
 mkdir -p $index_path
 mkdir -p ${result_dir}
 # rm -rf ${result_dir}/*
-
+echo "entry_count,batch_size,value_size,key_size,data_folder_size,index_folder_size" > "${result_dir}/size"    
 # 运行测试
 for n_acc in "${load_account[@]}"; do
     for batch_size in "${batch_sizes[@]}"; do
@@ -41,6 +41,22 @@ for n_acc in "${load_account[@]}"; do
             ../build_release/bin/microBenchmark -a $n_acc -b $load_batch_size -t $num_transaction_version -z $batch_size -k $key_size -v $value_size -d $data_path -i $index_path -r $result_path
             sleep 5
             set +x
+
+            # 检查文件夹是否存在
+            if [ ! -d "$data_path" ]; then
+                echo "数据文件夹 $data_path 不存在。"
+                exit 1
+            fi
+            # 检查文件夹是否存在
+            if [ ! -d "$index_path" ]; then
+                echo "数据文件夹 $data_path 不存在。"
+                exit 1
+            fi
+            # 获取文件夹大小
+            data_folder_size=$(du -sk "$data_path" | cut -f1)
+            index_folder_size=$(du -sk "$index_path" | cut -f1)
+            # 输出结果
+            echo "${n_acc},${batch_size},${value_size},${key_size},${data_folder_size},${index_folder_size}" >> "${result_dir}/size"  
         done
     done
 done
