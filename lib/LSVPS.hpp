@@ -50,6 +50,42 @@ struct LookupBlock {
   bool Deserialize(std::istream &in);
 };
 
+// ActiveDeltaPageCache类定义
+class ActiveDeltaPageCache {
+ public:
+  ActiveDeltaPageCache(size_t max_size, std::string cache_dir);
+  ~ActiveDeltaPageCache();
+  void Store(DeltaPage *page);
+  DeltaPage *Get(const string &pid);
+  void FlushToDisk();
+  void PrintStats() const;  // 添加获取统计信息的方法
+
+ private:
+  void evictIfNeeded();
+  // 为批量写入准备，计算并记录页面偏移量
+  void prepareForBatchWrite(const string &pid, DeltaPage *page);
+  // 实际写入单个页面到磁盘
+  void writePageToDisk(const string &pid, DeltaPage *page);
+  // 从磁盘读取页面
+  bool readFromDisk(const string &pid, DeltaPage *page);
+  void writeIndexBlock();
+  void readIndexBlock();
+
+  DeltaPage *page_pool_;
+  std::queue<size_t> free_pages_;
+  unordered_map<string, size_t> cache_;          // map pid to cache pool
+  unordered_map<string, size_t> pid_to_offset_;  // Maps pid to file offset
+  const size_t max_size_;                        // 缓存最大容量
+  std::string cache_dir_;                        // 磁盘缓存目录
+  std::string cache_file_;                       // 统一存储文件路径
+  std::list<string> lru_queue_;                  // 用于LRU淘汰策略
+
+  // 添加统计变量
+  size_t total_accesses_ = 0;  // 总访问次数
+  size_t cache_hits_ = 0;      // 缓存命中次数
+  size_t disk_reads_ = 0;      // 磁盘读取次数
+};
+
 // LSVPS类定义
 class LSVPS {
  public:
@@ -58,7 +94,7 @@ class LSVPS {
       : cache_(),
         table_(*this),
         index_file_path_(index_file_path),
-        active_delta_page_cache_(3000000, index_file_path) {}
+        active_delta_page_cache_(30000, index_file_path) {}
   Page *PageQuery(uint64_t version);
   BasePage *LoadPage(const PageKey &pagekey);
   void StorePage(Page *page);
@@ -69,6 +105,7 @@ class LSVPS {
   void Flush();
   void StoreActiveDeltaPage(DeltaPage *page);
   DeltaPage *GetActiveDeltaPage(const string &pid);
+  ActiveDeltaPageCache& GetActiveDeltaPageCache() { return active_delta_page_cache_; }
 
  private:
   // 块缓存类（占位）
@@ -92,36 +129,6 @@ class LSVPS {
     // max number of entries in lookup block = 126, 126^2 = 15876
     const size_t max_size_ = 15876;
     LSVPS &parent_LSVPS_;
-  };
-
-  class ActiveDeltaPageCache {
-   public:
-    ActiveDeltaPageCache(size_t max_size, std::string cache_dir);
-    ~ActiveDeltaPageCache();
-    void Store(DeltaPage *page);
-    DeltaPage *Get(const string &pid);
-    // TODO: DeltaPage* GetNewPage();
-    void FlushToDisk();
-
-   private:
-    void evictIfNeeded();
-    // 为批量写入准备，计算并记录页面偏移量
-    void prepareForBatchWrite(const string &pid, DeltaPage *page);
-    // 实际写入单个页面到磁盘
-    void writePageToDisk(const string &pid, DeltaPage *page);
-    // 从磁盘读取页面
-    bool readFromDisk(const string &pid, DeltaPage *page);
-    void writeIndexBlock();
-    void readIndexBlock();
-
-    DeltaPage *page_pool_;
-    std::queue<size_t> free_pages_;
-    unordered_map<string, size_t> cache_;          // map pid to cache pool
-    unordered_map<string, size_t> pid_to_offset_;  // Maps pid to file offset
-    const size_t max_size_;                        // 缓存最大容量
-    std::string cache_dir_;                        // 磁盘缓存目录
-    std::string cache_file_;                       // 统一存储文件路径
-    std::list<string> lru_queue_;                  // 用于LRU淘汰策略
   };
 
   Page *pageLookup(const PageKey &pagekey);

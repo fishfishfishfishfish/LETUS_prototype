@@ -3,11 +3,10 @@ mode=release
 
 # 定义测试参数数组
 key_size=32  # 20:SHA-1, 32:SHA-256
-batch_sizes=(500 1000 2000 3000 4000 5000)
-# batch_sizes=(100 200 300 400 500)
 batch_sizes=(5000)
+# batch_sizes=(100 200 300 400 500)
 value_sizes=(1024)
-n_test=1000
+n_test=100
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
 echo "data_path: $data_path"
@@ -37,7 +36,7 @@ for batch_size in "${batch_sizes[@]}"; do
         
         result_path="$PWD/results/get_put_hashed_key_k${key_size}_${mode}/b${batch_size}v${value_size}.csv"
         echo $(date "+%Y-%m-%d %H:%M:%S") >> results/test_get_put_hashed_key_k${key_size}_${mode}.log
-        echo "batch_size: ${batch_size}, value_size: ${value_size}, key_size: ${key_size}" >> results/test_get_put_hashed_key_k${key_size}_${mode}.log
+        echo "batch_size: ${batch_size}, value_size: ${value_size}, key_size: ${key_size}" > results/test_get_put_hashed_key_k${key_size}_${mode}.log
         # 运行测试并提取结果
         ../build_${mode}/bin/get_put_hashed_key -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path >> results/test_get_put_hashed_key_k${key_size}_${mode}.log
         set +x
@@ -45,4 +44,4 @@ for batch_size in "${batch_sizes[@]}"; do
     done
 done
 
-python3 plot.py get_put_hashed_key_k${key_size}_${mode}
+# python3 plot.py get_put_hashed_key_k${key_size}_${mode}

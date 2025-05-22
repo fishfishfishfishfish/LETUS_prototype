@@ -13,7 +13,7 @@
 
 #include "VDLS.hpp"
 #include "common.hpp"
-
+#include "ddpg_binding.hpp"
 static constexpr size_t HASH_SIZE = 32;
 static constexpr size_t DMM_NODE_FANOUT = 16;
 static constexpr uint16_t Td_ = 128;  // update threshold of DeltaPage
@@ -241,6 +241,7 @@ class DMMTrie {
   uint64_t GetVersionUpperbound(const string &pid, uint64_t version);
 
  private:
+  DDPGBinding* ddpg_binding_instance;
   LSVPS *page_store_;
   VDLS *value_store_;
   uint64_t tid;

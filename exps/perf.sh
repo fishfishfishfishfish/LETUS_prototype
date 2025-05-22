@@ -10,7 +10,7 @@ data_path="$PWD/../data/"
 index_path="$PWD/../index"
 echo "data_path: $data_path"
 echo "index_path: $index_path"
-
+test_name="get_put_hashed_key"  # 脚本开头添加
 # 编译项目
 cd ../
 ./build.sh --build-type debug --cxx g++
@@ -40,16 +40,16 @@ for batch_size in "${batch_sizes[@]}"; do
         # echo "cmd: ../build_debug/bin/get_put_hashed_key -b $batch_size -v $value_size -n $n_test -d $data_path -i $index_path -r $result_path"
         
         # 使用perf进行性能分析
-        # sudo perf record -g -F 99 ../build_debug/bin/get_put_hashed_key -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path
-        sudo perf record -g -F 99 ../build_debug/bin/${test_name} -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path
+        # sudo -E perf record -g -F 99 ../build_debug/bin/get_put_hashed_key -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path
+        sudo -E perf record -g -F 99 ../build_debug/bin/${test_name} -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path
         # ../build_debug/bin/${test_name} -b $batch_size -v $value_size -k $key_size -n $n_test -d $data_path -i $index_path -r $result_path
         
         # 生成火焰图
-        sudo perf script | ./FlameGraph/stackcollapse-perf.pl > perf.folded
+        sudo -E perf script | ./FlameGraph/stackcollapse-perf.pl > perf.folded
         ./FlameGraph/flamegraph.pl perf.folded > results/profiling_${test_name}/flamegraph_${batch_size}_${value_size}.svg
         
         # 生成性能报告
-        sudo perf report --stdio > results/profiling_${test_name}/perf_report_${batch_size}_${value_size}.txt
+        sudo -E perf report --stdio > results/profiling_${test_name}/perf_report_${batch_size}_${value_size}.txt
         
         # 保存结果
         echo "$batch_size,$value_size,$n_test,$put_latency,$get_latency,$put_throughput,$get_throughput" >> results/get_put_2_results.csv

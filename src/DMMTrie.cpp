@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "LSVPS.hpp"
-
+#include "ddpg_binding.hpp"
 using namespace std;
 
 // string HashFunction(const string &input) {  // hash function SHA-256
@@ -1056,9 +1056,11 @@ DMMTrie::DMMTrie(uint64_t tid, LSVPS *page_store, VDLS *value_store,
   page_cache_.clear();
   put_cache_.clear();
   deltapage_versions_.clear();
+  DDPGBinding* ddpg_binding_instance = new DDPGBinding();
 }
 
 DMMTrie::~DMMTrie() {
+  delete ddpg_binding_instance;
   while (lru_cache_.size()) {  // cache is full
     PageKey last_key = pagekeys_.back().first;
     auto last_iter = lru_cache_.find(last_key);
@@ -1086,6 +1088,13 @@ bool DMMTrie::Put(uint64_t tid, uint64_t version, const string &key,
 }
 
 string DMMTrie::Get(uint64_t tid, uint64_t version, const string &key) {
+  /*Get:
+   * 1. 从put_cache_中获取value
+   * 2. 从page_cache_中获取page
+   * 3. 从active_deltapages_中获取deltapage
+   * 4. 从page_store_中获取page
+   * 5. 从value_store_中获取value
+   */
   string nibble_path = key;
   uint64_t page_version = version;
   LeafNode *leafnode = nullptr;
@@ -1142,8 +1151,15 @@ void DMMTrie::Delete(uint64_t tid, uint64_t version, const string &key) {
   put_cache_[key] = "";
 }
 
-// deprecated
-void DMMTrie::Commit(uint64_t version) { CalcRootHash(0, version); }
+void DMMTrie::Commit(uint64_t version) {
+  CalcRootHash(0, version);
+  // 输出缓存统计信息
+  std::cout << "Commit version: " << version << std::endl;
+  // std::cout << "Cache Statistics after Commit version " << version << ":" << std::endl;
+  // int time_cost = 12;
+  // std::cout  <<"DDPG test t_b is : " << ddpg_binding_instance->test(1/version, 100) << std::endl;
+  page_store_->GetActiveDeltaPageCache().PrintStats();
+}
 
 void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
   if (version != current_version_) {
