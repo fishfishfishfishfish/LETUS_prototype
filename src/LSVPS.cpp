@@ -1,6 +1,7 @@
 #include "LSVPS.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -340,7 +341,7 @@ void LSVPS::StorePage(Page *page) {
 
 void LSVPS::Flush() {
   table_.Flush();
-  active_delta_page_cache_.FlushToDisk();
+  active_delta_page_cache_.Flush();
 }
 void LSVPS::AddIndexFile(const IndexFile &index_file) {
   index_files_.push_back(index_file);
@@ -606,337 +607,202 @@ void LSVPS::MemIndexTable::writeToStorage(
 }
 
 // ActiveDeltaPageCache implementation
-ActiveDeltaPageCache::ActiveDeltaPageCache(size_t max_size, std::string cache_dir)
-    : max_size_(max_size), cache_dir_(std::move(cache_dir)) {
+ActiveDeltaPageCache::ActiveDeltaPageCache(size_t max_size, const std::string& cache_dir)
+    : page_pool_(max_size), max_size_(max_size), cache_dir_(cache_dir), index_dirty_(false) {
   // 确保缓存目录存在
   std::filesystem::create_directories(cache_dir_);
-  cache_file_ =
-      (std::filesystem::path(cache_dir_) / "delta_cache.dat").string();
-
-  // 如果文件存在，读取索引块
-  if (std::filesystem::exists(cache_file_)) {
-    readIndexBlock();
-  } else {  // 如果文件不存在，创建一个新的文件
-    std::ofstream out(cache_file_, std::ios::binary | std::ios::out);
-    out.close();
+  data_file_ = cache_dir + "/delta_cache.dat";
+  index_file_ = cache_dir + "/delta_cache.idx";
+  //initialize the page pool
+  for(size_t i = 0; i < max_size; ++i){
+    free_slots_.push(i);
   }
-
-  // prepare the page pool
-  page_pool_ = new DeltaPage[max_size_];
-  for (size_t i = 0; i < max_size_; ++i) {
-    free_pages_.push(i);
-  }
+  loadIndex();
 }
 
 ActiveDeltaPageCache::~ActiveDeltaPageCache() {
 #ifdef DEBUG
-  std::cout << cache_.size() << std::endl;
+  std::cout << memory_cache_.size() << std::endl;
 #endif
-  FlushToDisk();
+  Flush();
+  saveIndex();
   PrintStats();
-  delete[] page_pool_;
 }
 
-void ActiveDeltaPageCache::Store(DeltaPage *page) {
-  const string &pid = page->GetPageKey().pid;
-  writePageToDisk(pid, page);
+bool ActiveDeltaPageCache::loadIndex() {
+  if(!std::filesystem::exists(index_file_)) return true;
+
+  std::ifstream idx_file(index_file_, std::ios::binary);
+  if(!idx_file) return false;
+
+  size_t count;
+  idx_file.read(reinterpret_cast<char*>(&count), sizeof(count));
+  if(!idx_file.good()) return false;
+
+  for(size_t i = 0; i < count; ++i){
+    size_t pid_len;
+    idx_file.read(reinterpret_cast<char*>(&pid_len), sizeof(pid_len));
+
+    std::string pid(pid_len, '\0');
+    idx_file.read(&pid[0], pid_len);
+
+    uint64_t offset;
+    idx_file.read(reinterpret_cast<char*>(&offset), sizeof(offset));
+    if(!idx_file.good()) return false;
+
+    disk_index_[pid] = offset;
+  }
+  return true;
 }
 
-DeltaPage *ActiveDeltaPageCache::Get(const string &pid) {
+bool ActiveDeltaPageCache::saveIndex() {
+  try {
+    if(!index_dirty_) return true;
+    std::string backup_file = index_file_ + ".tmp";
+    std::ofstream idx_file(backup_file, std::ios::binary);
+    if(!idx_file) return false;
+    size_t count = disk_index_.size();
+    idx_file.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    for(const auto& [pid, offset] : disk_index_){
+      size_t pid_len = pid.length(); 
+      idx_file.write(reinterpret_cast<const char*>(&pid_len), sizeof(pid_len));
+      idx_file.write(pid.c_str(), pid_len);
+      idx_file.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
+    }
+    if(!idx_file.good()) return false;
+    idx_file.close();
+    std::filesystem::rename(backup_file, index_file_);
+    index_dirty_ = false;
+    return true;
+  } catch (const std::filesystem::filesystem_error& ex) {
+        std::cerr << "Filesystem error: " << ex.what() << std::endl;
+        return false;
+    } catch (const std::exception& ex) {
+        std::cerr << "Error saving index: " << ex.what() << std::endl;
+        return false;
+  }
+  
+}
+
+DeltaPage *ActiveDeltaPageCache::Get(const std::string &pid) {
   total_accesses_++;  // 增加总访问次数
   
-  auto it = cache_.find(pid);
-  if (it != cache_.end()) {
-    cache_hits_++;  // 增加缓存命中次数
-    return &page_pool_[it->second];
+  auto memory_it = memory_cache_.find(pid);
+  if(memory_it != memory_cache_.end()) {
+    cache_hits_++;
+    return &page_pool_[memory_it->second];
   }
   
   // 如果不在内存中，尝试从磁盘读取
-  evictIfNeeded();
-  size_t pool_pos = free_pages_.front();
-  DeltaPage *page = &page_pool_[pool_pos];
-  free_pages_.pop();
-  bool state = readFromDisk(pid, page);
-  
-  if (state) {
-    disk_reads_++;  // 增加磁盘读取次数
-  } else {
-    // 如果读取失败，创建一个新的页面
+  if(free_slots_.empty()) {
+    evictOldest();
+  }
+
+  size_t slot = free_slots_.front();
+  free_slots_.pop();
+  memory_cache_[pid] = slot;
+
+  DeltaPage* page = &page_pool_[slot];
+  if(!loadFromDisk(pid)) {
     page->ClearDeltaPage();
     page->SetLastPageKey(PageKey{0, 0, false, pid});
     page->SetPageKey(PageKey{0, 0, true, pid});
   }
-  cache_.insert(std::make_pair(pid, pool_pos));
+  else disk_reads_++;
   return page;
 }
 
-void ActiveDeltaPageCache::prepareForBatchWrite(const string &pid,
-                                               DeltaPage *page) {
-  // 计算并记录页面偏移量，为批量写入做准备
-  size_t offset = 0;
-  if (!pid_to_offset_.empty()) {
-    // 找到最大的offset
-    for (const auto &[_, existing_offset] : pid_to_offset_) {
-      offset = std::max(offset, existing_offset + PAGE_SIZE);
-    }
-  }
-  pid_to_offset_[pid] = offset;
+void ActiveDeltaPageCache::evictOldest() {
+  if(memory_cache_.empty()) return;
+  auto it = memory_cache_.begin();
+  std::string victim_pid = it->first;
+  size_t victim_slot = it->second;
+  saveToDisk(victim_pid, &page_pool_[victim_slot]);
+  memory_cache_.erase(it);
+  free_slots_.push(victim_slot);
 }
 
-void ActiveDeltaPageCache::writePageToDisk(const string &pid,
-                                          DeltaPage *page) {
-  // 打开文件并写入
-  std::fstream out(cache_file_,
-                   std::ios::binary | std::ios::out | std::ios::in);
-  if (!out) {
-    throw std::runtime_error("Failed to open file for writing: " + cache_file_);
-  }
+void ActiveDeltaPageCache::Store(DeltaPage *page) {
+  const std::string &pid = page->GetPageKey().pid;
+  saveToDisk(pid, page);
+}
 
-  try {
-    // 记录当前写入位置
-    size_t offset;
-    auto it = pid_to_offset_.find(pid);
-    if (it != pid_to_offset_.end()) {
-      offset = it->second;
-      out.seekp(offset, ios::beg);
+bool ActiveDeltaPageCache::loadFromDisk(const std::string& pid) {
+  auto index_it = disk_index_.find(pid);
+  if(index_it == disk_index_.end()) return false;
+  std::ifstream data_file(data_file_, std::ios::binary);
+  if(!data_file) return false;
+
+  data_file.seekg(index_it->second);
+  char buffer[PAGE_SIZE];
+  data_file.read(buffer, PAGE_SIZE);
+  if(!data_file.good()) return false;
+
+  size_t slot = memory_cache_[pid];
+  return page_pool_[slot].Deserialize(buffer);
+}
+
+void ActiveDeltaPageCache::saveToDisk(const std::string& pid, DeltaPage* page) {
+
+  uint64_t offset;
+  std::fstream data_file;
+  auto index_it = disk_index_.find(pid);
+  if(index_it != disk_index_.end()) {
+    offset = index_it->second;
+    data_file.open(data_file_, std::ios::binary | std::ios::in | std::ios::out);
+  } else {
+    if(std::filesystem::exists(data_file_)) {
+      offset = std::filesystem::file_size(data_file_);
+      data_file.open(data_file_, std::ios::binary | std::ios::in | std::ios::out);
     } else {
-      out.seekp(0, ios::end);
-      offset = out.tellp();
-      pid_to_offset_.insert(std::make_pair(pid, offset));
+      offset = 0;
+       // 先用out模式创建文件
+      data_file.open(data_file_, std::ios::binary | std::ios::out);
+      data_file.close();
+      // 再用读写模式打开
+      data_file.open(data_file_, std::ios::binary | std::ios::in | std::ios::out);
     }
-
-    // 写入页面数据
-    if (!page || !page->GetData()) {
-      throw std::runtime_error("Invalid page data encountered");
-    }
-    page->SerializeTo();
-    out.write(reinterpret_cast<const char *>(page->GetData()), PAGE_SIZE);
-    if (!out.good()) {
-      throw std::runtime_error("Failed to write page data");
-    }
-
-    out.flush();
-    out.close();
-  } catch (const std::exception &e) {
-    out.close();
-    throw;
+    disk_index_[pid] = offset;
+    index_dirty_ = true;
   }
+  if(!data_file) {
+    throw std::runtime_error("Failed to open data file: "+data_file_);
+  }
+  // 写入页面数据
+  if (!page || !page->GetData()) {
+    throw std::runtime_error("Invalid page data encountered");
+  }
+  auto filesize = std::filesystem::file_size(data_file_);
+  page->SerializeTo();
+  data_file.clear(); // 清理流状态
+  data_file.seekp(offset);
+  if (!data_file) {
+       std::cerr << "seekp failed! offset=" << offset << " errno=" << errno << std::endl;
+       data_file.clear();
+   }
+  data_file.write(reinterpret_cast<const char*>(page->GetData()), PAGE_SIZE);
+  if(!data_file.good()) {
+    throw std::runtime_error("Failed to write page data");
+  }
+  data_file.close();
+  if(!data_file) {
+      throw std::runtime_error("Failed to close data file properly");
+  } 
+
 }
 
-void ActiveDeltaPageCache::evictIfNeeded() {
-  while (cache_.size() >= max_size_) {
-    // 直接使用begin()获取第一个元素，不需要额外的find操作
-    auto it = cache_.begin();
-    string pid_to_evict = it->first;
-    page_pool_[it->second].ClearDeltaPage();
-    free_pages_.push(it->second);
-    cache_.erase(it);
-  }
+void ActiveDeltaPageCache::Flush() {
+    // 将所有内存中的页面保存到磁盘
+    for (const auto& [pid, slot] : memory_cache_) {
+        saveToDisk(pid, &page_pool_[slot]);
+    }
+    // 保存索引
+    saveIndex();
 }
 
-void ActiveDeltaPageCache::writeIndexBlock() {
-  // 先计算索引块的大小（不包括最后的size_t）
-  size_t index_block_size = 0;
-  std::vector<std::pair<std::string, size_t>> pid_offsets;
-  pid_offsets.reserve(pid_to_offset_.size());
 
-  // 收集所有pid和offset，并计算总大小
-  for (const auto &[pid, offset] : pid_to_offset_) {
-    pid_offsets.emplace_back(pid, offset);
-    index_block_size += sizeof(size_t) + pid.length() + sizeof(size_t);
-  }
 
-  // 如果文件不为空，需要先删除旧的索引块
-  if (std::filesystem::exists(cache_file_) &&
-      std::filesystem::file_size(cache_file_) > 0) {
-    // 读取旧的索引块大小
-    std::ifstream in(cache_file_, std::ios::binary);
-    if (!in) {
-      throw std::runtime_error(
-          "Failed to open file for reading old index block: " + cache_file_);
-    }
 
-    in.seekg(-static_cast<std::streamoff>(sizeof(size_t)), std::ios::end);
-    size_t old_index_block_size;
-    in.read(reinterpret_cast<char *>(&old_index_block_size),
-            sizeof(old_index_block_size));
-    in.close();
-
-    // 截断文件，删除旧的索引块
-    std::filesystem::resize_file(cache_file_,
-                                 std::filesystem::file_size(cache_file_) -
-                                     old_index_block_size - sizeof(size_t));
-  }
-
-  // 打开文件，写入新的索引块
-  std::ofstream out(cache_file_, std::ios::binary | std::ios::app);
-  if (!out) {
-    throw std::runtime_error("Failed to open file for writing index block: " +
-                             cache_file_);
-  }
-
-  try {
-    // 写入每个pid和offset
-    for (const auto &[pid, offset] : pid_offsets) {
-      // 写入pid长度和pid
-      size_t pid_length = pid.length();
-      out.write(reinterpret_cast<const char *>(&pid_length),
-                sizeof(pid_length));
-      out.write(pid.c_str(), pid_length);
-      // 写入offset
-      out.write(reinterpret_cast<const char *>(&offset), sizeof(offset));
-    }
-
-    // 在文件末尾写入索引块总大小
-    out.write(reinterpret_cast<const char *>(&index_block_size),
-              sizeof(index_block_size));
-
-    out.flush();
-    out.close();
-
-    // 清空pid_to_offset_
-    pid_to_offset_.clear();
-  } catch (const std::exception &e) {
-    out.close();
-    throw;
-  }
-}
-
-void ActiveDeltaPageCache::readIndexBlock() {
-  std::ifstream in(cache_file_, std::ios::binary);
-  if (!in) {
-    throw std::runtime_error("Failed to open file for reading index block: " +
-                             cache_file_);
-  }
-
-  try {
-    // 定位到文件末尾，读取索引块大小
-    in.seekg(-static_cast<std::streamoff>(sizeof(size_t)), std::ios::end);
-    size_t index_block_size;
-    in.read(reinterpret_cast<char *>(&index_block_size),
-            sizeof(index_block_size));
-
-    // 定位到索引块开始位置
-    in.seekg(-static_cast<std::streamoff>(index_block_size + sizeof(size_t)),
-             std::ios::end);
-
-    // 读取每个pid和offset
-    size_t current_size = 0;
-    while (current_size < index_block_size) {
-      size_t pid_length;
-      in.read(reinterpret_cast<char *>(&pid_length), sizeof(pid_length));
-      current_size += sizeof(size_t);
-
-      std::string pid(pid_length, '\0');
-      in.read(&pid[0], pid_length);
-      current_size += pid_length;
-
-      size_t offset;
-      in.read(reinterpret_cast<char *>(&offset), sizeof(offset));
-      current_size += sizeof(size_t);
-
-      pid_to_offset_[pid] = offset;
-    }
-  } catch (const std::exception &e) {
-    in.close();
-    throw;
-  }
-  in.close();
-}
-
-void ActiveDeltaPageCache::FlushToDisk() {
-  // 先为所有页面准备偏移量
-  for (const auto &[pid, pool_pos] : cache_) {
-    prepareForBatchWrite(pid, &page_pool_[pool_pos]);
-  }
-
-  // 打开文件
-  std::fstream out(cache_file_,
-                   std::ios::binary | std::ios::out | std::ios::in);
-  if (!out) {
-    throw std::runtime_error("Failed to open file for writing: " + cache_file_);
-  }
-
-  try {
-    // 将所有缓存中的页面写入磁盘
-    for (const auto &[pid, pool_pos] : cache_) {
-      size_t offset;
-      auto offset_it = pid_to_offset_.find(pid);
-      if (offset_it != pid_to_offset_.end()) {
-        offset = offset_it->second;
-        out.seekp(offset, ios::beg);
-      } else {
-        out.seekp(0, ios::end);
-        offset = out.tellp();
-        pid_to_offset_.insert(std::make_pair(pid, offset));
-      }
-
-      if (!page_pool_[pool_pos].GetData()) {
-        throw std::runtime_error("Invalid page data encountered");
-      }
-      page_pool_[pool_pos].SerializeTo();
-      out.write(reinterpret_cast<const char *>(page_pool_[pool_pos].GetData()),
-                PAGE_SIZE);
-      if (!out.good()) {
-        throw std::runtime_error("Failed to write page data");
-      }
-
-      pid_to_offset_[pid] = offset;
-    }
-
-    out.flush();
-    out.close();
-
-    // 写入最终的索引块
-    writeIndexBlock();
-  } catch (const std::exception &e) {
-    out.close();
-    throw;
-  }
-}
-
-bool ActiveDeltaPageCache::readFromDisk(const string &pid,
-                                       DeltaPage *page) {
-  // 检查pid是否在索引中
-  auto offset_it = pid_to_offset_.find(pid);
-  if (offset_it == pid_to_offset_.end()) {
-    return false;  // 页面不在磁盘上
-  }
-
-  // 打开文件
-  std::ifstream in(cache_file_, std::ios::binary);
-  if (!in) {
-    throw std::runtime_error("Failed to open file for reading: " + cache_file_);
-  }
-
-  try {
-    // 定位到页面数据
-    in.seekg(offset_it->second);
-    if (!in.good()) {
-      throw std::runtime_error("Failed to seek to page data");
-    }
-
-    // 读取页面数据
-    char *data = new char[PAGE_SIZE];
-    in.read(data, PAGE_SIZE);
-    if (!in.good()) {
-      delete[] data;
-      in.close();
-      throw std::runtime_error("Failed to read page data");
-    }
-    in.close();
-
-    // 创建DeltaPage对象
-    bool state = page->Deserialize(data);
-
-    delete[] data;
-
-    return state;
-  } catch (const std::exception &e) {
-    in.close();
-    throw;
-  }
-}
 
 void ActiveDeltaPageCache::PrintStats() const {
   std::cout << "Cache Statistics:" << std::endl;

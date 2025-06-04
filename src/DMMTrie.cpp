@@ -212,19 +212,20 @@ IndexNode::IndexNode(const IndexNode &other)
       Node *child = other.GetChild(i);
       if (child != nullptr) {
         if (child->IsLeaf()) {
+          // 使用对象池创建LeafNode
           children_[i] =
               make_tuple(get<0>(other.children_[i]), get<1>(other.children_[i]),
-                         new LeafNode(*dynamic_cast<LeafNode *>(child)));
+                         LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(child)));
         } else {
+          // 使用对象池创建IndexNode
           children_[i] =
               make_tuple(get<0>(other.children_[i]), get<1>(other.children_[i]),
-                         new IndexNode(*dynamic_cast<IndexNode *>(child)));
+                         IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(child)));
         }
       } else {
         children_[i] = make_tuple(get<0>(other.children_[i]),
                                   get<1>(other.children_[i]), nullptr);
       }
-
     } else {
       children_[i] = make_tuple(0, "", nullptr);
     }
@@ -318,11 +319,11 @@ void IndexNode::DeserializeFrom(char *buffer, size_t &current_size,
       current_size += sizeof(bool);
 
       if (child_is_leaf_node) {  // second level of page is leafnode
-        Node *child = new LeafNode();
+        Node *child = LeafNodeFactory::create();
         child->DeserializeFrom(buffer, current_size, false);
         this->AddChild(i, child);  // add pointer to children in indexnode
       } else {                     // second level of page is indexnode
-        Node *child = new IndexNode();
+        Node *child = IndexNodeFactory::create();
         child->DeserializeFrom(buffer, current_size, false);
         this->AddChild(i, child);
       }
@@ -794,9 +795,9 @@ BasePage::BasePage(const BasePage &other) : Page(other), trie_(other.trie_) {
   // Deep copy the root node
   if (other.root_) {
     if (other.root_->IsLeaf()) {
-      root_ = new LeafNode(*dynamic_cast<LeafNode *>(other.root_));
+      root_ = LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(other.root_));
     } else {
-      root_ = new IndexNode(*dynamic_cast<IndexNode *>(other.root_));
+      root_ = IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(other.root_));
     }
   } else {
     root_ = nullptr;
@@ -833,10 +834,10 @@ BasePage::BasePage(DMMTrie *trie, char *buffer) : trie_(trie) {
   current_size += sizeof(bool);
 
   if (is_leaf_node) {  // the root node of page is leafnode
-    root_ = new LeafNode();
+    root_ = LeafNodeFactory::create();
     root_->DeserializeFrom(buffer, current_size, true);
   } else {  // the root node of page is indexnode
-    root_ = new IndexNode();
+    root_ = IndexNodeFactory::create();
     root_->DeserializeFrom(buffer, current_size, true);
   }
 
@@ -851,18 +852,18 @@ BasePage::BasePage(DMMTrie *trie, string key, string pid, string nibbles)
   //   cout << "new BasePage" << endl;
   // #endif
   if (nibbles.size() == 0) {  // leafnode
-    root_ = new LeafNode(0, key, {}, "");
+    root_ = LeafNodeFactory::create(0, key, {}, "");
   } else if (nibbles.size() == 1) {  // indexnode->leafnode
-    Node *child_node = new LeafNode(0, key, {}, "");
-    root_ = new IndexNode(0, "", 0);
+    Node *child_node = LeafNodeFactory::create(0, key, {}, "");
+    root_ = IndexNodeFactory::create(0, "", 0);
 
     int index = GetIndex(nibbles[0]);
     root_->AddChild(index, child_node, 0, "");
   } else {  // indexnode->indexnode
     int index = GetIndex(nibbles[1]);
     // second level of indexnode should route its child by bitmap
-    Node *child_node = new IndexNode(0, "", 1 << index);
-    root_ = new IndexNode(0, "", 0);
+    Node *child_node = IndexNodeFactory::create(0, "", 1 << index);
+    root_ = IndexNodeFactory::create(0, "", 0);
 
     index = GetIndex(nibbles[0]);
     root_->AddChild(index, child_node, 0, "");
@@ -875,10 +876,18 @@ BasePage::~BasePage() {
   // #endif
   for (int i = 0; i < DMM_NODE_FANOUT; i++) {
     if (root_->HasChild(i)) {
-      delete root_->GetChild(i);
+      if(root_->GetChild(i)->IsLeaf()) {
+        LeafNodeFactory::recycle(dynamic_cast<LeafNode *>(root_->GetChild(i)));
+      } else {
+        IndexNodeFactory::recycle(dynamic_cast<IndexNode *>(root_->GetChild(i)));
+      }
     }
   }
-  delete root_;
+  if(root_->IsLeaf()) {
+    LeafNodeFactory::recycle(dynamic_cast<LeafNode *>(root_));
+  } else {
+    IndexNodeFactory::recycle(dynamic_cast<IndexNode *>(root_));
+  }
 }
 
 /* serialized BasePage format (size in bytes):
@@ -918,7 +927,7 @@ void BasePage::UpdatePage(uint64_t version,
   if (nibbles.size() == 0) {
     // page has one leafnode, eg. page "abcdef" for key "abcdef"
     if (!root_) {
-      root_ = new LeafNode(0, pagekey.pid, {}, "");
+      root_ = LeafNodeFactory::create(0, pagekey.pid, {}, "");
     }
     static_cast<LeafNode *>(root_)->UpdateNode(version, location, value, 0,
                                                deltapage);
@@ -926,12 +935,12 @@ void BasePage::UpdatePage(uint64_t version,
     // page has one indexnode and one level of leafnodes, eg. page "abcd" for
     // key "abcde"
     if (!root_) {
-      root_ = new IndexNode(0, "", 0);
+      root_ = IndexNodeFactory::create(0, "", 0);
     }
     int index = GetIndex(nibbles[0]);
     if (!root_->HasChild(index)) {
       Node *child_node =
-          new LeafNode(0, pagekey.pid + to_string(index), {}, "");
+          LeafNodeFactory::create(0, pagekey.pid + to_string(index), {}, "");
       root_->AddChild(index, child_node, 0, "");
     }
     static_cast<LeafNode *>(root_->GetChild(index))
@@ -943,11 +952,11 @@ void BasePage::UpdatePage(uint64_t version,
   } else {
     // page has two levels of indexnodes , eg. page "ab" for key "abcdef"
     if (!root_) {
-      root_ = new IndexNode(0, "", 0);
+      root_ = IndexNodeFactory::create(0, "", 0);
     }
     int index = GetIndex(nibbles[0]), child_index = GetIndex(nibbles[1]);
     if (!root_->HasChild(index)) {
-      Node *child_node = new IndexNode(0, "", 1 << child_index);
+      Node *child_node = IndexNodeFactory::create(0, "", 1 << child_index);
       root_->AddChild(index, child_node, 0, "");
     }
     static_cast<IndexNode *>(root_->GetChild(index))
@@ -1001,9 +1010,9 @@ void BasePage::UpdateDeltaItem(const DeltaPage::DeltaItem &deltaitem) {
   if (root_ == nullptr) {
     // create root if replay function in LSVPS has no basepage to start from
     if (deltaitem.location_in_page == 0 && deltaitem.is_leaf_node == true) {
-      root_ = new LeafNode();
+      root_ = LeafNodeFactory::create();
     } else {
-      root_ = new IndexNode();
+      root_ = IndexNodeFactory::create();
     }
   }
 
@@ -1011,7 +1020,7 @@ void BasePage::UpdateDeltaItem(const DeltaPage::DeltaItem &deltaitem) {
     if (deltaitem.location_in_page == 0) {
       node = root_;
     } else if (!root_->HasChild(deltaitem.location_in_page - 1)) {
-      node = new LeafNode();
+      node = LeafNodeFactory::create();
       root_->AddChild(deltaitem.location_in_page - 1, node, 0, "");
     } else {
       node = root_->GetChild(deltaitem.location_in_page - 1);
@@ -1025,7 +1034,7 @@ void BasePage::UpdateDeltaItem(const DeltaPage::DeltaItem &deltaitem) {
     if (deltaitem.location_in_page == 0) {
       node = root_;
     } else if (!root_->HasChild(deltaitem.location_in_page - 1)) {
-      node = new IndexNode();
+      node = IndexNodeFactory::create();
       root_->AddChild(deltaitem.location_in_page - 1, node, 0, "");
     } else {
       node = root_->GetChild(deltaitem.location_in_page - 1);
@@ -1056,7 +1065,7 @@ DMMTrie::DMMTrie(uint64_t tid, LSVPS *page_store, VDLS *value_store,
   page_cache_.clear();
   put_cache_.clear();
   deltapage_versions_.clear();
-  DDPGBinding* ddpg_binding_instance = new DDPGBinding();
+  // DDPGBinding* ddpg_binding_instance = new DDPGBinding();
 }
 
 DMMTrie::~DMMTrie() {
@@ -1257,7 +1266,6 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
       BasePage *basepage_copy = new BasePage(*page);
       basepage_copy->SerializeTo();
       WritePageCache(pagekey, basepage_copy);  // store basepage in cache
-
       UpdatePageVersion(pagekey, version, version);
       deltapage->ClearBasePageUpdateCount();
       deltapage->SetLastPageKey(pagekey);
@@ -1266,25 +1274,21 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
     // deltapage->SerializeTo();
     page_store_->StoreActiveDeltaPage(deltapage);
   }
-
+  // send the active deltapages back to LSVPS
   for (const auto &it : page_cache_) {
     page_store_->StorePage(it.second);
-#ifdef DEBUG
+    #ifdef DEBUG
     std::cout << "Commit" << version
               << " Store Page: " << it.second->GetPageKey() << std::endl;
-#endif
+    #endif
   }
 
-  // send the active deltapages back to LSVPS
-  // for (const auto &it : active_deltapages) {
-  //   page_store_->StoreActiveDeltaPage(it.second);
-  // }
   for (auto &pair : page_cache_) {
     delete pair.second;
   }
   page_cache_.clear();
   put_cache_.clear();
-#ifdef DEBUG
+  #ifdef DEBUG
   cout << "Version " << version << " committed" << endl;
   cout << "Active delta pages: " << active_deltapages_.size() << endl;
   cout << "Active delta page size: " << sizeof(active_deltapages_.end()->second)
@@ -1306,7 +1310,7 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
         std::cout << "Physical memory used: " << value << " kB" << endl;
     }
   }
-#endif
+  #endif
 }
 
 string DMMTrie::GetRootHash(uint64_t tid, uint64_t version) {
@@ -1486,8 +1490,7 @@ uint64_t DMMTrie::GetVersionUpperbound(const string &pid, uint64_t version) {
   return *it;
 }
 
-BasePage *DMMTrie::GetPage(
-    const PageKey &pagekey) {  // get a page by its pagekey
+BasePage *DMMTrie::GetPage(const PageKey &pagekey) {  // get a page by its pagekey
   auto it = lru_cache_.find(pagekey);
   if (it != lru_cache_.end()) {  // page is in cache
     // move the accessed page to the front

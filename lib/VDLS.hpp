@@ -263,8 +263,10 @@ class VDLS {
     }
 
     // 确保文件至少有 MaxFileSize 大小
-    ftruncate(fd, MaxFileSize);
-
+    int t = ftruncate(fd, MaxFileSize);
+    if(t == -1){
+      throw runtime_error("Cannot truncate file: " + filename);
+    }
     // 内存映射文件为写映射区域
     write_map_ =
         mmap(nullptr, MaxFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
