@@ -633,6 +633,7 @@ LSVPS::ActiveDeltaPageCache::~ActiveDeltaPageCache() {
   std::cout << cache_.size() << std::endl;
 #endif
   FlushToDisk();
+  delete[] page_pool_;
 }
 
 void LSVPS::ActiveDeltaPageCache::Store(DeltaPage *page) {
