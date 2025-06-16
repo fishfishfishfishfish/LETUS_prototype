@@ -40,10 +40,10 @@ using namespace std;
 //   return string(reinterpret_cast<char *>(hash), hash_len);
 // }
 
-string HashFunction(const string &input) { // SHA 1
+string HashFunction(const string &input) {  // SHA 1
   unsigned char hash[SHA_DIGEST_LENGTH];
-  SHA1(reinterpret_cast<const unsigned char*>(input.c_str()),
-        input.size(), hash);
+  SHA1(reinterpret_cast<const unsigned char *>(input.c_str()), input.size(),
+       hash);
   return string(reinterpret_cast<char *>(hash), SHA_DIGEST_LENGTH);
 }
 
@@ -213,14 +213,14 @@ IndexNode::IndexNode(const IndexNode &other)
       if (child != nullptr) {
         if (child->IsLeaf()) {
           // 使用对象池创建LeafNode
-          children_[i] =
-              make_tuple(get<0>(other.children_[i]), get<1>(other.children_[i]),
-                         LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(child)));
+          children_[i] = make_tuple(
+              get<0>(other.children_[i]), get<1>(other.children_[i]),
+              LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(child)));
         } else {
           // 使用对象池创建IndexNode
-          children_[i] =
-              make_tuple(get<0>(other.children_[i]), get<1>(other.children_[i]),
-                         IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(child)));
+          children_[i] = make_tuple(
+              get<0>(other.children_[i]), get<1>(other.children_[i]),
+              IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(child)));
         }
       } else {
         children_[i] = make_tuple(get<0>(other.children_[i]),
@@ -795,9 +795,11 @@ BasePage::BasePage(const BasePage &other) : Page(other), trie_(other.trie_) {
   // Deep copy the root node
   if (other.root_) {
     if (other.root_->IsLeaf()) {
-      root_ = LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(other.root_));
+      root_ =
+          LeafNodeFactory::createCopy(*dynamic_cast<LeafNode *>(other.root_));
     } else {
-      root_ = IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(other.root_));
+      root_ =
+          IndexNodeFactory::createCopy(*dynamic_cast<IndexNode *>(other.root_));
     }
   } else {
     root_ = nullptr;
@@ -876,14 +878,15 @@ BasePage::~BasePage() {
   // #endif
   for (int i = 0; i < DMM_NODE_FANOUT; i++) {
     if (root_->HasChild(i)) {
-      if(root_->GetChild(i)->IsLeaf()) {
+      if (root_->GetChild(i)->IsLeaf()) {
         LeafNodeFactory::recycle(dynamic_cast<LeafNode *>(root_->GetChild(i)));
       } else {
-        IndexNodeFactory::recycle(dynamic_cast<IndexNode *>(root_->GetChild(i)));
+        IndexNodeFactory::recycle(
+            dynamic_cast<IndexNode *>(root_->GetChild(i)));
       }
     }
   }
-  if(root_->IsLeaf()) {
+  if (root_->IsLeaf()) {
     LeafNodeFactory::recycle(dynamic_cast<LeafNode *>(root_));
   } else {
     IndexNodeFactory::recycle(dynamic_cast<IndexNode *>(root_));
@@ -1163,10 +1166,12 @@ void DMMTrie::Commit(uint64_t version) {
   CalcRootHash(0, version);
   // 输出缓存统计信息
   std::cout << "Commit version: " << version << std::endl;
-  // std::cout << "Cache Statistics after Commit version " << version << ":" << std::endl;
-  // int time_cost = 12;
-  // std::cout  <<"DDPG test t_b is : " << ddpg_binding_instance->test(1/version, 100) << std::endl;
+// std::cout << "Cache Statistics after Commit version " << version << ":" <<
+// std::endl; int time_cost = 12; std::cout  <<"DDPG test t_b is : " <<
+// ddpg_binding_instance->test(1/version, 100) << std::endl;
+#ifdef DEBUG
   page_store_->GetActiveDeltaPageCache().PrintStats();
+#endif
 }
 
 void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
@@ -1276,10 +1281,10 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
   // send the active deltapages back to LSVPS
   for (const auto &it : page_cache_) {
     page_store_->StorePage(it.second);
-    #ifdef DEBUG
+#ifdef DEBUG
     std::cout << "Commit" << version
               << " Store Page: " << it.second->GetPageKey() << std::endl;
-    #endif
+#endif
   }
 
   for (auto &pair : page_cache_) {
@@ -1287,7 +1292,7 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
   }
   page_cache_.clear();
   put_cache_.clear();
-  #ifdef DEBUG
+#ifdef DEBUG
   cout << "Version " << version << " committed" << endl;
   cout << "Active delta pages: " << active_deltapages_.size() << endl;
   cout << "Active delta page size: " << sizeof(active_deltapages_.end()->second)
@@ -1309,7 +1314,7 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
         std::cout << "Physical memory used: " << value << " kB" << endl;
     }
   }
-  #endif
+#endif
 }
 
 string DMMTrie::GetRootHash(uint64_t tid, uint64_t version) {
@@ -1333,9 +1338,7 @@ DMMTrieProof DMMTrie::GetProof(uint64_t tid, uint64_t version,
     }
 
     if (!page->GetRoot()->IsLeaf()) {
-
       if (!page->GetRoot()->HasChild(GetIndex(nibble_path[i]))) {
-
         cout << "Key " << key << " not found at version " << version << endl;
         merkle_proof.value = "";
         return merkle_proof;
@@ -1489,7 +1492,8 @@ uint64_t DMMTrie::GetVersionUpperbound(const string &pid, uint64_t version) {
   return *it;
 }
 
-BasePage *DMMTrie::GetPage(const PageKey &pagekey) {  // get a page by its pagekey
+BasePage *DMMTrie::GetPage(
+    const PageKey &pagekey) {  // get a page by its pagekey
   auto it = lru_cache_.find(pagekey);
   if (it != lru_cache_.end()) {  // page is in cache
     // move the accessed page to the front
