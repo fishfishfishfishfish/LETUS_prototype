@@ -30,24 +30,28 @@ The project directory should look like this:
 ├── run.sh                  // bash script to run a simple test
 ├── CMakeLists.txt          // CMake file to build the project
 ├── exps                    // experiment directory
-│   ├── get_put.sh          // bash script to run experiment
-│   ├── get_put_2.sh
-│   ├── build.sh
-│   └── plot.py             // python script to plot the experiment results
+│   ├── micro_benchmark.sh          // bash script to start the micro-benchmark experiment
+│   ├── plot_micro_benchmark.py     // python script plot the result of micro-benchmark
+│   ├── run_micro_benmark.sh        // bash script to run the micro-benchmark and plot
+│   ├── range_benchmark.sh          // bash script to start the range-benchmark experiment
+│   ├── plot_range_benchmark.py     // python script plot the result of range-benchmark
+│   ├── run_range_benchmark.sh      // bash script to run the range-benchmark and plot
+│   └── ...                         // other experiment scripts
 ├── lib
 |   ├── LSVPS.hpp           // LSVPS header file
 │   ├── DMMTrie.hpp         // DMMTrie header file
 │   ├── VDLS.hpp            // VDLS header and impelemtation
 │   ├── common.hpp          // some commonly used data structures
-│   └── Letus.h             // LETUS interface for C
+│   └── Letus.h             // LETUS interface for C (to be used in go-wrapper)
 ├── src
 |   ├── LSVPS.cpp           // LSVPS implementation
 │   ├── DMMTrie.cpp         // DMMTrie implementation
 │   └── Letus.cpp           // LETUS interface implementation
 ├── workload
-|   ├── exes
-|   |   ├── get_put.cc      // test LETUS with 
-│   |   └── get_put_2.cc    // test LETUS with
+|   ├── exes                    // all the main function for evaluation
+|   |   ├── microBenchmark.cc   // implement the micro-benchmark experiment
+|   |   ├── rangeBenchmark.cc   // implement the range-benchmark experiment
+|   |   └──...                  // other workloads
 │   └── lib/                // utility functions for workload generator
 ├── gowrapper               // go wrapper for LETUS
 │   ├── go-build.sh         // bash script to build the go-wrapper
@@ -70,11 +74,12 @@ Developers are required to install the following dependencies:
 ## Build
 ### build for release
 ```
-$ ./build.sh
+$ cd LETUS_prototype/
+$ ./build.sh --build-type release --cxx g++
 ```
 ### build for debug
 ```
-$ ./build.sh debug
+$ ./build.sh --build-type release --cxx g++
 ```
 
 ### Build with go-wrapper
@@ -96,97 +101,45 @@ Run a docker container
 ```
 $ docker run -it -v ${PWD}:/home -w /home letus-go /bin/bash
 ```
+# Run
+We provde serveral workloads to test the performance of LETUS.
 
-## Run
-This command will test LETUS with the put-then-historical-get workload (described below).
-```
-$ ./run.sh -b [batch_size] -v [value_len] -k [key_len] -n [num_version] 2>run.log
-```
-> Note: in current state, the execution result is still `[ERROR] Program crashed`.
+## workloads from the paper
+### simple payment
+### micro-benchmark
+### stand-alone
 
+## micro-benchmark
+Micro-benchmark first load the data into LETUS, the data volume is specified by `entry_count`.
+The key size and value size of each entry is specified by `key_size` and `value_size`.
+Then it randomly updates the data in batch, and collect the latency and throughput of each update.
+The batch size is specfied by `batch_size`.
+Then it randomly reads the data in batch, and collect the latency and throughput of each read.
 
-To test the go-wrapper, developers can run the following command.
-```
-$ cd gowrapper
-$ ./go-run.sh
-```
-
-# Experiments
-We test LETUS with two workloads: put-then-get and put-then-historical-get.
-
-## put-then-get workload
-The put-then-get workload is characterized by four parameters.
-- `key_len`: the length of a key.
-- `value_len`: the length of a value.
-- `batch_size`: number of keys to insert in one batch/transaction.
-- `num_version`: total number of versions, i.e. the number of batches to insert.
-
-The workload iterate `num_version` times, and in each iteration, it test LETUS with `batch_size` of put operations and `batch_size` of get operations.
-
-In an iteration, the workload first generates a batch of `PUT(key, value)` tasks. Each task insert a key-value record into LETUS. The generation of a key-value record is described as follow.
-- key: we randomly sample a key from a zipfian distribution. To make each key has a same length (`key_len`), we set the upperbound of the sampling to 10^`key_len`.
-- value: we randomly pick an ASCII charater, and repeat it `value_len` times.
-
-Then, the workload generates a batch of `GET(key)` tasks. Each `GET` task is correspond to one `PUT` task in the batch of `PUT` tasks, and a pair of corresponding tasks have a same key.
-
-As a result, each `GET` task can retrieve the value inserted by the `PUT` task.
-
-## put-then-historical-get workload
-The put-then-historical-get workload is also characterized by four parameters: `key_len`, `value_len`, `batch_size`, `num_version`.
-
-At first, the workload iterate `num_version` times. In the `i`-th iteration, the workload generates a batch of `PUT(key, value, version)` tasks, where the `version` is set to `i`.
-
-Then, again, the workload iterate `num_version` times, and this time it generates a batch of `GET(key, version)` tasks in the `i`-th iteration, where the `version` is set to `i`.
-
-As a result, each `GET` task can retrieve the value inserted by the `PUT` task with a specific version.
-
-## ycsb_simple workload
-Parameters: `key_len`, `value_len`, `batch_size`, `record_count`, `op_count`.
-The ycsb_simple workload comprimise two phrases: loading phrase, transaction phrase.
-**Loading phrase**: The ycsb_simple workload insert `record_count` key-value records into the database. Every `batch_size` insertions form one batch and is assigned a version number.
-**Transaction phrase**: The ycsb_simple workload generate `op_count` operations. Each operation is randomly chosen from `[Read, Update, Insert, Scan, ReadModifyWrite]` operations.
-- `Read`: the workload randomly selects a key that was inserted in the loading phrase, and read the value of this key.
-- `Update`: the workload randomly selects a key that was inserted in the loading phrase, and update its value with a random value.
-- `Insert`: the workload generates a new key that was not inserted in the loading phrase, and insert it into the database with a random value.
-- `Scan`: the workload randomly selects a key that was inserted in the loading phrase, randomly select a scan length, and reads the values of the scaned keys in the database.
-- `ReadModifyWrite`: the workload randomly select a key, and perform a ReadModifyWrite operation on it. The workload first reads the value of this key, then modify the value to a with a random value, and finally write the modified value back to the database.
-All the key-value read or written during the transaction phrase are recorded and verify in a verification function/thread.
-
-## Run experiments
-This command will run put-then-historical-get workload multiple times to scan `batch_size` in `[500,1000,2000,3000,4000,5000]`, `value_len` in `[256, 512, 1024, 2048]` bytes. The `key_len` is set to 5 bytes and `num_version` is set to 1000.
+To run the micro-benchmark, execute the following command.
 ```
 $ cd exps/
-$ ./test_get_put.sh 2> get_put_2.log
+$./run_micro_benchmark.sh
 ```
-The execution will produce a plot of latency and throughput in `exps/results`.
-The execution will produce a plot of latency and throughput in `exps/results`.
-our experiment results is obtain within an experiment environment described as follows.
-1. **OS**：Ubuntu 20.04.4 LTS (GNU/Linux 5.4.0-177-generic x86_64)
-2. **CPU**: 72-core Intel(R) Xeon(R) Gold 6240C CPU @ 2.60GHz
-3. **Memory**: 32GB x 12devices = 384GB
-4. **Disk（SSD）**: Intel DC P3600 SSD 1.6tb NVMe PCIe 3.0 X 4 MLC HHHL AIC 20nm SSDPEDME016T4F, Read/Write Throughput: up to 2600/1700 MB/s, Random I/O Operations Read/Write: Up to 450/56 K-IOPS
+A figure shows the result of micro-benchmark can be found in `exps/result_letus/micro_benchmark_summary.png`.
+The following result is abtained with `entry_count=1000000`, `key_size=64`, `value_size=256B, 512B, 1024B, 2048B`, `batch_size=500~5000`.
 
-<img src="README.assets/put-then-get.png" style="zoom:15%;" />
+<img src="README.assets/micro_benchmark_summary.png" width="50%" height="50%">
 
-This command will run put-then-historical-get workload multiple times to scan `batch_size` in `[500,1000,2000,3000,4000,5000]`, `value_len` in `[256, 512, 1024, 2048]` bytes. The `key_len` is set to 32 bytes and `num_version` is set to 8.
-```
-$ cd exps/
-$ ./test_put_get_hist_random.sh 2> test_put_get_hist_random.log
-```
-The execution will produce a plot of latency and throughput in `exps/results`.
-our experiment results is obtain within an experiment environment described as follows.
-1. **OS**：Ubuntu 20.04.4 LTS (GNU/Linux 5.4.0-177-generic x86_64)
-2. **CPU**: 72-core Intel(R) Xeon(R) Gold 6240C CPU @ 2.60GHz
-3. **Memory**: 32GB x 12devices = 384GB
-4. **Disk（SSD）**: Intel DC P3600 SSD 1.6tb NVMe PCIe 3.0 X 4 MLC HHHL AIC 20nm SSDPEDME016T4F, Read/Write Throughput: up to 2600/1700 MB/s, Random I/O Operations Read/Write: Up to 450/56 K-IOPS
-
-<img src="README.assets/put-then-historical-get.png" style="zoom:30%;" />
-
-This command will run the ycsb_simple workload.
+## range-benchmark
+Range-benchmark first load the data into LETUS, the data volume is specified by `entry_count`.
+The key size and value size of each entry is specified by `key_size` and `value_size`.
+A list of range size is given, for example `[5, 50, 100, 200, 300, 400, 500, 1000, 2000]`.
+For each range size `r`, it randomly chose a start key `k`, and query LETUS of all the key in the range ``[k, k+r)``.
+Then it collects the latency and throughput of each query.
+To run the range-benchmark, execute the following command.
 ```
 $ cd exps/
-$ ./test_ycsb_simple.sh
+$./run_range_benchmark.sh
 ```
+A figure shows the result of range-benchmark can be found in `exps/result_letus/range_benchmark_summary.png`.
+The following result is obtained with `entry_count=1M/10M`, `key_size=64`, `value_size=1024B`.
 
+<img src="README.assets/range_benchmark_summary.png" width="50%" height="50%">
 
 # Citation

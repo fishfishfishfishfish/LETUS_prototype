@@ -156,7 +156,7 @@ plt.grid(True)
 
 plt.tight_layout()
 
-plt.savefig(summary_plot_file, dpi=300, bbox_inches='tight')
-plt.close()
+
+
 
 print(f"\n图表已保存为 {summary_plot_file}")
