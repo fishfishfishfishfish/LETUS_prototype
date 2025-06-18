@@ -1,8 +1,8 @@
 db_name=$1
 echo "db_name: $db_name"
 # 定义测试参数数组
-load_account=(1000000)
-# load_account=(40000000)
+# load_account=(1000000)
+load_account=(40000000)
 # load_account=(100000000)
 batch_sizes=(500 1000 2000 3000 4000 5000)
 value_sizes=(256 512 1024 2048)
@@ -11,13 +11,13 @@ load_batch_size=10000
 # load_batch_size=100000
 key_size=32
 
+timestamp=$(date +"%Y%m%d_%H%M%S")
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
-result_dir="$PWD/results_${db_name}/micro_benchmark"
+result_dir="$PWD/results_${db_name}/micro_benchmark_"$timestamp
 echo "data_path: $data_path"
 echo "index_path: $index_path"
 echo "result_dir: $result_dir"
-
 
 mkdir -p $data_path
 mkdir -p $index_path

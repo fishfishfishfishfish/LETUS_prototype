@@ -25,9 +25,100 @@ int main(int argc, char** argv) {
   int num_txn = 10000;
   int txn_batch_size = 600;
   int key_len = 9;
+  int value_len = 9;
   std::string data_path = "data/";
   std::string index_path = "index";
   std::string result_path = "exps/results/test.csv";
+
+  int opt;
+  while ((opt = getopt(argc, argv, "a:b:t:z:k:v:d:i:r:")) != -1) {
+    switch (opt) {
+      case 'a':  // num_accout
+      {
+        char* strtolPtr;
+        num_accout = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') || (num_accout <= 0)) {
+          std::cerr << "option -b requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'b':  // load_batch_size
+      {
+        char* strtolPtr;
+        load_batch_size = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') ||
+            (load_batch_size <= 0)) {
+          std::cerr << "option -b requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 't':  // num_txn
+      {
+        char* strtolPtr;
+        num_txn = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') ||
+            (num_txn <= 0)) {
+          std::cerr << "option -t requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'z':  // txn_batch_size
+      {
+        char* strtolPtr;
+        txn_batch_size = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') ||
+            (txn_batch_size <= 0)) {
+          std::cerr << "option -z requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'k':  // length of key.
+      {
+        char* strtolPtr;
+        key_len = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') || (key_len <= 0)) {
+          std::cerr << "option -k requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'v':  // length of value.
+      {
+        char* strtolPtr;
+        value_len = strtoul(optarg, &strtolPtr, 10);
+        if ((*optarg == '\0') || (*strtolPtr != '\0') || (value_len <= 0)) {
+          std::cerr << "option -v requires a numeric arg\n" << std::endl;
+        }
+        break;
+      }
+
+      case 'd':  // data path
+      {
+        data_path = optarg;
+        break;
+      }
+
+      case 'i':  // index path
+      {
+        index_path = optarg;
+        break;
+      }
+
+      case 'r':  // result path
+      {
+        result_path = optarg;
+        break;
+      }
+
+      default:
+        std::cerr << "Unknown argument " << argv[optind] << std::endl;
+        break;
+    }
+  }
 
   // init database
   LSVPS* page_store = new LSVPS(index_path);
