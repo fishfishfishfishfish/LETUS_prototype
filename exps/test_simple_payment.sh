@@ -7,18 +7,19 @@ cd ../
 
 # 定义测试参数数组
 db_name=$1
-echo "db_name: $db_name"
-num_account=(50000000 100000000 250000000 500000000)
+test_name=$2
+echo "db_name: $db_name, test_name=$test_name"
+# num_account=(50000000 100000000 250000000 500000000)
+num_account=(50000000)
 load_batch_size=100000
 batch_size=4000
 key_size=64
-num_txn=20
+num_txn=80000
 
 cd exps/
-timestamp=$(date +"%Y%m%d_%H%M%S")
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
-result_dir="$PWD/results_${db_name}/simple-payment_${timestamp}"
+result_dir="$PWD/results_${db_name}/simple-payment_${test_name}"
 echo "data_path: $data_path"
 echo "index_path: $index_path"
 echo "result_dir: $result_dir"
@@ -46,5 +47,3 @@ for n_acc in "${num_account[@]}"; do
     sleep 5
     set +x
 done
-
-python3 plot.py put_get_hist_count
