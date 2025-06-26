@@ -3,11 +3,13 @@ test_name=$2
 echo "db_name: $db_name, test_name=$test_name"
 # 定义测试参数数组
 # load_account=(1000000)
-load_account=(40000000)
+load_account=(10000 100000 1000000 10000000)
 # load_account=(100000000)
 # batch_sizes=(500 1000 2000 3000 4000 5000)
 # value_sizes=(256 512 1024 2048)
-num_transaction_version=20
+batch_sizes=(5000)
+value_sizes=(256)
+num_transaction_version=0
 load_batch_size=10000
 # load_batch_size=100000
 key_size=32
@@ -56,7 +58,7 @@ for n_acc in "${load_account[@]}"; do
             data_folder_size=$(du -sk "$data_path" | cut -f1)
             index_folder_size=$(du -sk "$index_path" | cut -f1)
             # 输出结果
-            echo "${n_acc},${batch_size},${value_size},${key_size},${data_folder_size},${index_folder_size},${data_folder_size+index_folder_size}" >> "${result_dir}/size"  
+            echo "${n_acc},${batch_size},${value_size},${key_size},${data_folder_size},${index_folder_size},$(${data_folder_size}+${index_folder_size})" >> "${result_dir}/size"  
         done
     done
 done
