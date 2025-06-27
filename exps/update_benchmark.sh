@@ -1,15 +1,16 @@
 db_name=$1
-echo "db_name: $db_name"
+test_name=$2
+echo "db_name: $db_name, test_name=$test_name"
 # 定义测试参数数组
 load_account=(500 1000 2000 3000 4000 5000)
 value_sizes=(1024)
 key_size=64
 update_count=100
 
-data_path="$PWD/../data/"
-result_dir="$PWD/results_${db_name}/update_benchmark"
-echo "data_path: $data_path"
-echo "result_dir: $result_dir"
+# data_path="$PWD/../data/"
+# result_dir="$PWD/results_${db_name}/update_benchmark"
+# echo "data_path: $data_path"
+# echo "result_dir: $result_dir"
 
 
 data_path="$PWD/../data/"
