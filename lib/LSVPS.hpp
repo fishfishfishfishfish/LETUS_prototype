@@ -118,10 +118,13 @@ class LSVPS {
     std::queue<size_t> free_pages_;
     unordered_map<string, size_t> cache_;          // map pid to cache pool
     unordered_map<string, size_t> pid_to_offset_;  // Maps pid to file offset
-    const size_t max_size_;                        // 缓存最大容量
-    std::string cache_dir_;                        // 磁盘缓存目录
-    std::string cache_file_;                       // 统一存储文件路径
-    std::list<string> lru_queue_;                  // 用于LRU淘汰策略
+    unordered_map<string, PageKey>
+        pid_to_last_pagekey_;  // Maps pid to last pagekey
+
+    const size_t max_size_;        // 缓存最大容量
+    std::string cache_dir_;        // 磁盘缓存目录
+    std::string cache_file_;       // 统一存储文件路径
+    std::list<string> lru_queue_;  // 用于LRU淘汰策略
   };
 
   Page *pageLookup(const PageKey &pagekey);

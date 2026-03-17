@@ -574,8 +574,9 @@ void LSVPS::MemIndexTable::writeToStorage(
       if (!page || !page->GetData()) {
         throw std::runtime_error("Invalid page data encountered");
       }
-      page->SerializeTo();
-      outFile.write(reinterpret_cast<const char *>(page->GetData()), PAGE_SIZE);
+      size_t pagesize = page->SerializeTo();
+      // outFile.write(reinterpret_cast<const char *>(&pagesize), sizeof(pagesize));
+      outFile.write(reinterpret_cast<const char *>(page->GetData()), pagesize);
       if (!outFile.good()) {
         throw std::runtime_error("Failed to write page data");
       }
@@ -648,7 +649,13 @@ void LSVPS::ActiveDeltaPageCache::Store(DeltaPage *page) {
   //   // delete cache_[pid];
   //   cache_[pid] = page;
   // }
-  writePageToDisk(pid, page);
+  if (page->GetDeltaPageUpdateCount() == 0) {
+    // std::cout << "empty page, skip write." << std::endl;
+    pid_to_last_pagekey_[pid] = page->GetLastPageKey();
+  } else {
+    writePageToDisk(pid, page);
+    pid_to_last_pagekey_.erase(pid);
+  }
   // delete page;
 }
 
@@ -670,7 +677,11 @@ DeltaPage *LSVPS::ActiveDeltaPageCache::Get(const string &pid) {
   if (!state) {
     // 如果读取失败，创建一个新的页面
     page->ClearDeltaPage();
-    page->SetLastPageKey(PageKey{0, 0, false, pid});
+    if (pid_to_last_pagekey_.find(pid) != pid_to_last_pagekey_.end()) {
+      page->SetLastPageKey(pid_to_last_pagekey_[pid]);
+    } else {
+      page->SetLastPageKey(PageKey{0, 0, true, pid});
+    }
     page->SetPageKey(PageKey{0, 0, true, pid});
   }
   cache_.insert(std::make_pair(pid, pool_pos));
