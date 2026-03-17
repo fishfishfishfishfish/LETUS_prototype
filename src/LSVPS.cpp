@@ -512,34 +512,6 @@ bool LSVPS::MemIndexTable::IsFull() const {
 void LSVPS::MemIndexTable::Flush() {
   if (buffer_.empty()) return;
 
-  std::vector<IndexBlock> index_blocks;
-  IndexBlock current_block;
-  uint64_t current_location = 0;
-
-  for (auto &page : buffer_) {
-    if (current_block.IsFull()) {
-      index_blocks.push_back(current_block);
-      current_block = IndexBlock();
-    }
-
-    current_block.AddMapping(page->GetPageKey(), current_location);
-    current_location += PAGE_SIZE;
-  }
-
-  if (!current_block.GetMappings().empty()) {
-    index_blocks.push_back(current_block);
-  }
-
-  LookupBlock lookup_block;
-  uint64_t indexBlockOffset = current_location;
-  for (const auto &block : index_blocks) {
-    if (!block.GetMappings().empty()) {
-      lookup_block.entries.push_back(
-          {block.GetMappings()[0].pagekey, indexBlockOffset});
-      indexBlockOffset += PAGE_SIZE;
-    }
-  }
-
   const std::string dir_path = parent_LSVPS_.index_file_path_ + "/IndexFile";
   if (!std::filesystem::exists(dir_path)) {
     std::filesystem::create_directory(dir_path);
@@ -548,7 +520,7 @@ void LSVPS::MemIndexTable::Flush() {
                          std::to_string(parent_LSVPS_.GetNumOfIndexFile()) +
                          ".dat";
 
-  writeToStorage(index_blocks, lookup_block, filepath);
+  writeToStorage(filepath);
 
   parent_LSVPS_.AddIndexFile(
       {buffer_.front()->GetPageKey(), buffer_.back()->GetPageKey(), filepath});
@@ -559,9 +531,7 @@ void LSVPS::MemIndexTable::Flush() {
   buffer_.clear();
 }
 
-void LSVPS::MemIndexTable::writeToStorage(
-    const std::vector<IndexBlock> &index_blocks,
-    const LookupBlock &lookup_block, const fs::path &filepath) {
+void LSVPS::MemIndexTable::writeToStorage(const fs::path &filepath) {
   std::ofstream outFile(filepath, std::ios::binary);
   if (!outFile) {
     throw std::runtime_error("Failed to open file for writing: " +
@@ -569,18 +539,45 @@ void LSVPS::MemIndexTable::writeToStorage(
   }
 
   try {
+    std::vector<IndexBlock> index_blocks;
+    IndexBlock current_block;
+    uint64_t current_location = 0;
     // 写入页面数据
     for (const auto &page : buffer_) {
       if (!page || !page->GetData()) {
         throw std::runtime_error("Invalid page data encountered");
       }
       size_t pagesize = page->SerializeTo();
-      // outFile.write(reinterpret_cast<const char *>(&pagesize), sizeof(pagesize));
+      // outFile.write(reinterpret_cast<const char *>(&pagesize),
+      // sizeof(pagesize));
       outFile.write(reinterpret_cast<const char *>(page->GetData()), pagesize);
       if (!outFile.good()) {
         throw std::runtime_error("Failed to write page data");
       }
       // page->ReleaseData();
+      // IndexBlock
+      if (current_block.IsFull()) {
+        index_blocks.push_back(current_block);
+        current_block = IndexBlock();
+      }
+
+      current_block.AddMapping(page->GetPageKey(), current_location);
+      current_location += pagesize;
+    }
+
+    if (!current_block.GetMappings().empty()) {
+      index_blocks.push_back(current_block);
+    }
+
+    // lookup block
+    LookupBlock lookup_block;
+    uint64_t indexBlockOffset = current_location;
+    for (const auto &block : index_blocks) {
+      if (!block.GetMappings().empty()) {
+        lookup_block.entries.push_back(
+            {block.GetMappings()[0].pagekey, indexBlockOffset});
+        indexBlockOffset += PAGE_SIZE;
+      }
     }
 
     // 写入索引块

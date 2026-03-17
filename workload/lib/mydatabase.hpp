@@ -73,6 +73,9 @@ class MyDatabase {
         trie->Commit(version);
         version++;
         current_batch_size = 0;
+        if (version % 100 == 0) {
+          std::cout << "write base data version: " << version << std::endl;
+        }
       }
     }
 

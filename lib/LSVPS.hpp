@@ -84,13 +84,12 @@ class LSVPS {
     void Flush();
 
    private:
-    void writeToStorage(const std::vector<IndexBlock> &index_blocks,
-                        const LookupBlock &lookup_blocks,
-                        const std::filesystem::path &filepath);
+    void writeToStorage(const std::filesystem::path &filepath);
     std::vector<Page *> buffer_;
     // gurantee that max_size >= one version pages
     // max number of entries in lookup block = 126, 126^2 = 15876
     const size_t max_size_ = 15876;
+    // const size_t max_size_ = 16;
     LSVPS &parent_LSVPS_;
   };
 
