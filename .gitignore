@@ -52,6 +52,9 @@
 build/
 build_debug/
 build_release/
+build_debug_letus/
+build_release_letus/
+
 IndexFile/
 bak/
 data/

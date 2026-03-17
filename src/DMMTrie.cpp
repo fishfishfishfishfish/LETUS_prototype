@@ -40,10 +40,10 @@ using namespace std;
 //   return string(reinterpret_cast<char *>(hash), hash_len);
 // }
 
-string HashFunction(const string &input) { // SHA 1
+string HashFunction(const string &input) {  // SHA 1
   unsigned char hash[SHA_DIGEST_LENGTH];
-  SHA1(reinterpret_cast<const unsigned char*>(input.c_str()),
-        input.size(), hash);
+  SHA1(reinterpret_cast<const unsigned char *>(input.c_str()), input.size(),
+       hash);
   return string(reinterpret_cast<char *>(hash), SHA_DIGEST_LENGTH);
 }
 
@@ -1198,6 +1198,7 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
     if (2 * it.second.size() + deltapage->GetDeltaPageUpdateCount() >=
         2 * Td_) {
       // the updates in page is more than the capacity of two deltapages
+      // directly generate a base page
       if_exceed = true;
       if (deltapage->GetDeltaPageUpdateCount() != 0) {
         PageKey deltapage_pagekey = {version, 0, true, pagekey.pid};
@@ -1313,9 +1314,7 @@ DMMTrieProof DMMTrie::GetProof(uint64_t tid, uint64_t version,
     }
 
     if (!page->GetRoot()->IsLeaf()) {
-
       if (!page->GetRoot()->HasChild(GetIndex(nibble_path[i]))) {
-
         cout << "Key " << key << " not found at version " << version << endl;
         merkle_proof.value = "";
         return merkle_proof;
