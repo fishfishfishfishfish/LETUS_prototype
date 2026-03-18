@@ -278,6 +278,8 @@ int main(int argc, char* argv[]) {
   // distributed environment)
   const std::vector<uint64_t> BASE_DATA_SIZES = {
       1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+  // const std::vector<uint64_t> BASE_DATA_SIZES = {
+  //     1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
   // ====================== Initialization ======================
   // Create database directory (Linux-only)

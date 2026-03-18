@@ -177,7 +177,10 @@ class MyDatabase {
   }
 
   // Force flush to disk (Linux: fsync/fdatasync)
-  bool flush() { return true; }
+  bool flush() {
+    page_store->Flush();
+    return true;
+  }
 
   // Clear all test data (ensure clean environment for each scale)
   bool clear_all_data() {
