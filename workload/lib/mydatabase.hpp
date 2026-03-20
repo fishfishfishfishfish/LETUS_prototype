@@ -162,7 +162,7 @@ class MyDatabase {
           uint64_t current_memory = get_process_memory_usage();
           std::cout << "write base data version: " << version
                     << ", memory: " << current_memory << " bytes"
-                    << " ( " << bytes_to_mb(current_memory) << " MB)"
+                    << " (" << bytes_to_mb(current_memory) << " MB)"
                     << std::endl;
         }
       }

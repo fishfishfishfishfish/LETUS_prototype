@@ -43,7 +43,6 @@ bool create_directory_recursive(const std::string& path) {
   return true;
 }
 
-
 // Simple command-line argument parser
 std::map<std::string, std::string> parse_arguments(int argc, char* argv[]) {
   std::map<std::string, std::string> args;
@@ -123,7 +122,6 @@ bool validate_parameters(int write_batch, int read_batch, int key_len,
   }
   return true;
 }
-
 
 int main(int argc, char* argv[]) {
   // ====================== Command-Line Parameter Parsing
@@ -298,7 +296,15 @@ int main(int argc, char* argv[]) {
 
     current_size = target_size;
     std::cout << "Test Results: " << std::endl;
-    // Step 4: Test write throughput at current data scale
+
+    // Step 4: Calculate disk usage at current data scale
+    uint64_t total_db_size = get_directory_total_size(DB_DIR);
+    double total_db_mb = bytes_to_mb(total_db_size);
+    // Average per record = (Total usage - Empty DB usage) / Current data scale
+    double avg_per_record = static_cast<double>(total_db_size - empty_db_size) /
+                            static_cast<double>(current_size);
+
+    // Step 5: Test write throughput at current data scale
     double write_throughput = 0.0;
     if (!db.test_batch_write(current_size, TEST_WRITE_BATCH, KEY_LENGTH,
                              VALUE_LENGTH, write_throughput)) {
@@ -308,7 +314,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  Write Throughput: " << std::fixed << std::setprecision(2)
               << write_throughput << " records/sec" << std::endl;
 
-    // Step 5: Test read throughput at current data scale
+    // Step 6: Test read throughput at current data scale
     double read_throughput = 0.0;
     if (!db.test_batch_read(current_size, TEST_READ_BATCH, KEY_LENGTH,
                             read_throughput)) {
@@ -317,13 +323,6 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "  Read Throughput:  " << std::fixed << std::setprecision(2)
               << read_throughput << " records/sec" << std::endl;
-
-    // Step 6: Calculate disk usage at current data scale
-    uint64_t total_db_size = get_directory_total_size(DB_DIR);
-    double total_db_mb = bytes_to_mb(total_db_size);
-    // Average per record = (Total usage - Empty DB usage) / Current data scale
-    double avg_per_record = static_cast<double>(total_db_size - empty_db_size) /
-                            static_cast<double>(current_size);
 
     // Step 7: Calculate memory usage at current data scale
     uint64_t current_memory = get_process_memory_usage();
