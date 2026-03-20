@@ -339,8 +339,11 @@ void LSVPS::StorePage(Page *page) {
 }
 
 void LSVPS::Flush() {
+  std::cout << "flush memtable..." << std::endl;
   table_.Flush();
+  std::cout << "flush delta pages..." << std::endl;
   active_delta_page_cache_.FlushToDisk();
+  std::cout << "flush done" << std::endl;
 }
 void LSVPS::AddIndexFile(const IndexFile &index_file) {
   index_files_.push_back(index_file);

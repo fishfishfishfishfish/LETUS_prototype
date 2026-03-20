@@ -58,7 +58,7 @@ class LSVPS {
       : cache_(),
         table_(*this),
         index_file_path_(index_file_path),
-        active_delta_page_cache_(3000000, index_file_path) {}
+        active_delta_page_cache_(4096, index_file_path) {}
   Page *PageQuery(uint64_t version);
   BasePage *LoadPage(const PageKey &pagekey);
   void StorePage(Page *page);
