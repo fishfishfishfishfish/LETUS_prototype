@@ -43,77 +43,6 @@ bool create_directory_recursive(const std::string& path) {
   return true;
 }
 
-// Linux-only directory size calculation (recursive)
-uint64_t get_directory_total_size(const std::string& dir_path) {
-  uint64_t total_size = 0;
-  DIR* dir = opendir(dir_path.c_str());
-
-  if (!dir) {
-    std::cerr << "Failed to open directory: " << dir_path
-              << " (errno: " << errno << ")" << std::endl;
-    return 0;
-  }
-
-  struct dirent* entry;
-  while ((entry = readdir(dir)) != NULL) {
-    // Skip . and ..
-    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-      continue;
-    }
-
-    std::string full_path = dir_path + "/" + entry->d_name;
-    struct stat stat_buf;
-
-    // Get file/directory stats
-    if (stat(full_path.c_str(), &stat_buf) == -1) {
-      std::cerr << "Failed to stat " << full_path << " (errno: " << errno << ")"
-                << std::endl;
-      continue;
-    }
-
-    // Recursively calculate subdirectory size
-    if (S_ISDIR(stat_buf.st_mode)) {
-      total_size += get_directory_total_size(full_path);
-    }
-    // Add regular file size
-    else if (S_ISREG(stat_buf.st_mode)) {
-      total_size += static_cast<uint64_t>(stat_buf.st_size);
-    }
-  }
-
-  closedir(dir);
-  return total_size;
-}
-
-uint64_t get_process_memory_usage() {
-  FILE* file = fopen("/proc/self/statm", "r");
-  if (!file) {
-    return 0;
-  }
-
-  uint64_t size, resident, share, text, lib, data, dt;
-  if (fscanf(file, "%lu %lu %lu %lu %lu %lu %lu", &size, &resident, &share,
-             &text, &lib, &data, &dt) != 7) {
-    fclose(file);
-    return 0;
-  }
-  fclose(file);
-
-  // resident is the resident set size in pages
-  // page size is typically 4096 bytes on Linux
-  long page_size = sysconf(_SC_PAGESIZE);
-  return resident * page_size;
-}
-
-// Get peak memory usage using getrusage
-uint64_t get_peak_memory_usage() {
-  struct rusage usage;
-  if (getrusage(RUSAGE_SELF, &usage) == 0) {
-    // ru_maxrss is in kilobytes
-    return usage.ru_maxrss * 1024;
-  }
-  return 0;
-}
 
 // Simple command-line argument parser
 std::map<std::string, std::string> parse_arguments(int argc, char* argv[]) {
@@ -195,18 +124,6 @@ bool validate_parameters(int write_batch, int read_batch, int key_len,
   return true;
 }
 
-// Convert bytes to MB (2 decimal places)
-double bytes_to_mb(uint64_t bytes) {
-  return static_cast<double>(bytes) / (1024.0 * 1024.0);
-}
-
-// Format number with comma as thousands separator
-std::string format_with_commas(uint64_t number) {
-  std::stringstream ss;
-  ss.imbue(std::locale(""));  // Use system locale for formatting
-  ss << number;
-  return ss.str();
-}
 
 int main(int argc, char* argv[]) {
   // ====================== Command-Line Parameter Parsing
