@@ -303,6 +303,10 @@ int main(int argc, char* argv[]) {
     // Average per record = (Total usage - Empty DB usage) / Current data scale
     double avg_per_record = static_cast<double>(total_db_size - empty_db_size) /
                             static_cast<double>(current_size);
+    std::cout << "  Total Disk Usage: " << std::fixed << std::setprecision(2)
+              << total_db_mb << " MB" << std::endl;
+    std::cout << "  Average Per Record: " << std::fixed << std::setprecision(2)
+              << avg_per_record << " bytes" << std::endl;
 
     // Step 5: Test write throughput at current data scale
     double write_throughput = 0.0;
@@ -334,10 +338,6 @@ int main(int argc, char* argv[]) {
         static_cast<double>(current_memory) / static_cast<double>(current_size);
 
     // Step 8: Output results (console + CSV)
-    std::cout << "  Total Disk Usage: " << std::fixed << std::setprecision(2)
-              << total_db_mb << " MB" << std::endl;
-    std::cout << "  Average Per Record: " << std::fixed << std::setprecision(2)
-              << avg_per_record << " bytes" << std::endl;
     std::cout << "  Current Memory:   " << std::fixed << std::setprecision(2)
               << current_memory_mb << " MB" << std::endl;
     std::cout << "  Peak Memory:      " << std::fixed << std::setprecision(2)
