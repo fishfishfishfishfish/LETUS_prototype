@@ -40,10 +40,10 @@ using namespace std;
 //   return string(reinterpret_cast<char *>(hash), hash_len);
 // }
 
-string HashFunction(const string &input) { // SHA 1
+string HashFunction(const string &input) {  // SHA 1
   unsigned char hash[SHA_DIGEST_LENGTH];
-  SHA1(reinterpret_cast<const unsigned char*>(input.c_str()),
-        input.size(), hash);
+  SHA1(reinterpret_cast<const unsigned char *>(input.c_str()), input.size(),
+       hash);
   return string(reinterpret_cast<char *>(hash), SHA_DIGEST_LENGTH);
 }
 
@@ -733,7 +733,7 @@ void DeltaPage::AddLeafNodeUpdate(uint8_t location, uint64_t version,
   ++b_update_count_;
 }
 
-void DeltaPage::SerializeTo() {
+size_t DeltaPage::SerializeTo() {
   char *buffer = this->GetData();
   memset(buffer, 0, PAGE_SIZE);
   size_t current_size = 0;
@@ -759,6 +759,7 @@ void DeltaPage::SerializeTo() {
     }
     item.SerializeTo(buffer, current_size);
   }
+  return current_size;
 }
 
 void DeltaPage::ClearDeltaPage() {
@@ -884,7 +885,7 @@ BasePage::~BasePage() {
 /* serialized BasePage format (size in bytes):
    | version (8) | tid (8) | tp (1) | pid_size (8 in 64-bit system) | pid
    (pid_size) | root node | */
-void BasePage::SerializeTo() {
+size_t BasePage::SerializeTo() {
   char *buffer = this->GetData();
   size_t current_size = 0;
 
@@ -907,6 +908,7 @@ void BasePage::SerializeTo() {
   current_size += pid_size;
 
   root_->SerializeTo(buffer, current_size, true);  // serialize nodes
+  return current_size;
 }
 
 void BasePage::UpdatePage(uint64_t version,
@@ -1195,9 +1197,12 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
 
     DeltaPage *deltapage = page_store_->GetActiveDeltaPage(pid);
 
-    if (2 * it.second.size() + deltapage->GetDeltaPageUpdateCount() >=
-        2 * Td_) {
-      // the updates in page is more than the capacity of two deltapages
+    // if (2 * it.second.size() + deltapage->GetDeltaPageUpdateCount() >=
+    //     2 * Td_) {
+    // the updates in page is more than the capacity of two deltapages
+    // directly generate a base page
+    if (2 * it.second.size() + deltapage->GetDeltaPageUpdateCount() >= Td_) {
+      // 只要跨页了就不行，因为只要版本更新了，就会创建delta page。
       if_exceed = true;
       if (deltapage->GetDeltaPageUpdateCount() != 0) {
         PageKey deltapage_pagekey = {version, 0, true, pagekey.pid};
@@ -1244,6 +1249,21 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
       UpdatePageVersion(pagekey, version, version);
       deltapage->ClearBasePageUpdateCount();
       deltapage->SetLastPageKey(pagekey);
+    }
+    if (deltapage->GetDeltaPageUpdateCount() != 0) {
+      // 不管满没满，delta page的内容都刷入storage
+      PageKey deltapage_pagekey = {version, 0, true, pagekey.pid};
+
+      DeltaPage *deltapage_copy = new DeltaPage(*deltapage);
+      deltapage_copy->SetPageKey(deltapage_pagekey);
+      deltapage_copy->SerializeTo();
+      // store frozen deltapage in cache
+      WritePageCache(deltapage_pagekey, deltapage_copy);
+
+      deltapage->ClearDeltaPage();  // delete all DeltaItems in DeltaPage
+      // record the PageKey of DeltaPage passed to LSVPS
+      deltapage->SetLastPageKey(deltapage_pagekey);
+      AddDeltaPageVersion(pagekey.pid, version);
     }
     UpdatePageKey(old_pagekey, pagekey);
     // deltapage->SerializeTo();
@@ -1313,9 +1333,7 @@ DMMTrieProof DMMTrie::GetProof(uint64_t tid, uint64_t version,
     }
 
     if (!page->GetRoot()->IsLeaf()) {
-
       if (!page->GetRoot()->HasChild(GetIndex(nibble_path[i]))) {
-
         cout << "Key " << key << " not found at version " << version << endl;
         merkle_proof.value = "";
         return merkle_proof;

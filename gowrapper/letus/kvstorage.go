@@ -9,7 +9,7 @@ import (
 )
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../lib
-#cgo LDFLAGS: -L${SRCDIR}/../../build_release -lletus -lssl -lcrypto -lstdc++
+#cgo LDFLAGS: -L${SRCDIR}/../../build_release_letus -lletus -lssl -lcrypto -lstdc++
 #include "Letus.h"
 #include <stdio.h>
 #include <stdlib.h>

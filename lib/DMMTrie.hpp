@@ -172,7 +172,7 @@ class DeltaPage : public Page {
                           const string &child_hash);
   void AddLeafNodeUpdate(uint8_t location, uint64_t version, const string &hash,
                          uint64_t fileID, uint64_t offset, uint64_t size);
-  void SerializeTo();
+  size_t SerializeTo();
   void ClearDeltaPage();
   const vector<DeltaItem> &GetDeltaItems() const;
   PageKey GetLastPageKey() const;
@@ -199,7 +199,7 @@ class BasePage : public Page {
   BasePage(DMMTrie *trie, string key, string pid, string nibbles);
   BasePage(const BasePage &other);  // deep copy
   ~BasePage();
-  void SerializeTo();
+  size_t SerializeTo();
   void UpdatePage(uint64_t version,
                   tuple<uint64_t, uint64_t, uint64_t> location,
                   const string &value, const string &nibbles,
@@ -250,7 +250,7 @@ class DMMTrie {
                 PageKey::Hash>
       lru_cache_;                             //  use a hash map as lru cache
   list<pair<PageKey, BasePage *>> pagekeys_;  // list to maintain cache order
-  const size_t max_cache_size_ = 3000000;      // maximum pages in cache
+  const size_t max_cache_size_ = 3000000;     // maximum pages in cache
   unordered_map<string, DeltaPage>
       active_deltapages_;  // deltapage of all pages, delta pages are indexed by
                            // pid

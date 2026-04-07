@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <string>
 
-static constexpr int PAGE_SIZE = 12288;  // 每个页面的大小为12KB
+static constexpr int PAGE_SIZE = 12288;  //  包含页面大小(size_t)和数据(12KB),
 
 // PageKey结构体
 struct PageKey {
@@ -125,7 +125,7 @@ class Page {  // 设置成抽象类 序列化 反序列化 getPageKey setPageKey
   }
 
   // virtual size_t GetSerializedSize() = 0;
-  virtual void SerializeTo() {}
+  virtual size_t SerializeTo() { return PAGE_SIZE; }
   virtual bool SerializeTo(std::ostream& out) const { return true; }
 
   virtual bool Deserialize(std::istream& in) {

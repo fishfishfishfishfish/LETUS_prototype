@@ -22,6 +22,7 @@ std::string BuildKeyName(uint64_t key_num, int key_len) {
 }
 
 int main(int argc, char** argv) {
+  cout << ">>>>>>>>>>>> microseq_benchmark >>>>>>>>>>>>" << endl;
   uint64_t num_accout = 5000;  // 40,000,000(40M) 2,000,000(2M)
   uint64_t load_batch_size = 100;
   uint64_t num_txn_version = 10;
@@ -165,24 +166,40 @@ int main(int argc, char** argv) {
   }
   sleep(1);
 
-  int num_txn = num_txn_version * txn_batch_size * 2;
-  uint64_t random_keys[num_txn];
-  UniformGenerator txn_key_generator(1, num_accout);
-  for (int i = 0; i < num_txn; i++) {
-    random_keys[i] = txn_key_generator.Next();
+  // gets
+  version -= 1;  // the follows are all reads and query the latest version
+  uint64_t num = 0;
+  for (int t = 0; t < int(num_txn_version); t++) {
+    // test get
+    auto start = std::chrono::system_clock::now();
+    // get_keys.insert(std::make_pair(version, std::vector<std::string>()));
+    for (int i = 0; i < int(txn_batch_size); i++) {
+      std::string key = BuildKeyName(num, key_len);
+      trie->Get(0, version, key);
+      num++;
+    }
+    auto end = std::chrono::system_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    double get_latency = double(duration.count()) *
+                         std::chrono::nanoseconds::period::num /
+                         std::chrono::nanoseconds::period::den;
+    std::cout << "version " << version << ", get latnecy:" << get_latency << ","
+              << "get throughput:" << txn_batch_size / get_latency << std::endl;
+    rs_file << version << ",GET," << get_latency << ","
+            << txn_batch_size / get_latency << std::endl;
   }
 
   // updates
-  int txn_key_id = 0;
-  for (; version <= num_load_version + num_txn_version; version++) {
+  num = 0;
+  for (version += 1; version <= num_load_version + num_txn_version; version++) {
     auto start = std::chrono::system_clock::now();
     for (int i = 0; i < int(txn_batch_size); i++) {
-      uint64_t num = random_keys[txn_key_id];
       std::string key = BuildKeyName(num, key_len);
       std::string val = "";
       val = val.append(value_len, RandomPrintChar(num));
       trie->Put(0, version, key, val);
-      txn_key_id++;
+      num++;
     }
     trie->Commit(version);
     auto end = std::chrono::system_clock::now();
@@ -195,29 +212,6 @@ int main(int argc, char** argv) {
               << "put throughput:" << txn_batch_size / put_latency << std::endl;
     rs_file << version << ",PUT," << put_latency << ","
             << txn_batch_size / put_latency << std::endl;
-  }
-
-  version -= 1;  // the follows are all reads and query the latest version
-  // gets
-  for (int t = 0; t < int(num_txn_version); t++) {
-    // test get
-    auto start = std::chrono::system_clock::now();
-    // get_keys.insert(std::make_pair(version, std::vector<std::string>()));
-    for (int i = 0; i < int(txn_batch_size); i++) {
-      std::string key = BuildKeyName(random_keys[txn_key_id], key_len);
-      trie->Get(0, version, key);
-      txn_key_id++;
-    }
-    auto end = std::chrono::system_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    double get_latency = double(duration.count()) *
-                         std::chrono::nanoseconds::period::num /
-                         std::chrono::nanoseconds::period::den;
-    std::cout << "version " << version << ", get latnecy:" << get_latency << ","
-              << "get throughput:" << txn_batch_size / get_latency << std::endl;
-    rs_file << version << ",GET," << get_latency << ","
-            << txn_batch_size / get_latency << std::endl;
   }
 
   std::cout << "finished" << std::endl;

@@ -58,7 +58,7 @@ class LSVPS {
       : cache_(),
         table_(*this),
         index_file_path_(index_file_path),
-        active_delta_page_cache_(3000000, index_file_path) {}
+        active_delta_page_cache_(4096, index_file_path) {}
   Page *PageQuery(uint64_t version);
   BasePage *LoadPage(const PageKey &pagekey);
   void StorePage(Page *page);
@@ -84,13 +84,12 @@ class LSVPS {
     void Flush();
 
    private:
-    void writeToStorage(const std::vector<IndexBlock> &index_blocks,
-                        const LookupBlock &lookup_blocks,
-                        const std::filesystem::path &filepath);
+    void writeToStorage(const std::filesystem::path &filepath);
     std::vector<Page *> buffer_;
     // gurantee that max_size >= one version pages
     // max number of entries in lookup block = 126, 126^2 = 15876
     const size_t max_size_ = 15876;
+    // const size_t max_size_ = 16;
     LSVPS &parent_LSVPS_;
   };
 
@@ -118,10 +117,13 @@ class LSVPS {
     std::queue<size_t> free_pages_;
     unordered_map<string, size_t> cache_;          // map pid to cache pool
     unordered_map<string, size_t> pid_to_offset_;  // Maps pid to file offset
-    const size_t max_size_;                        // 缓存最大容量
-    std::string cache_dir_;                        // 磁盘缓存目录
-    std::string cache_file_;                       // 统一存储文件路径
-    std::list<string> lru_queue_;                  // 用于LRU淘汰策略
+    unordered_map<string, PageKey>
+        pid_to_last_pagekey_;  // Maps pid to last pagekey
+
+    const size_t max_size_;        // 缓存最大容量
+    std::string cache_dir_;        // 磁盘缓存目录
+    std::string cache_file_;       // 统一存储文件路径
+    std::list<string> lru_queue_;  // 用于LRU淘汰策略
   };
 
   Page *pageLookup(const PageKey &pagekey);
