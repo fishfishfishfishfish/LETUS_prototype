@@ -77,6 +77,8 @@ add_executable(put_get_inter_hashed_key "workload/exes/put_get_inter_hashed_key.
 target_link_libraries(put_get_inter_hashed_key OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
 add_executable(simple_payment "workload/exes/simple_payment.cc" ${letus_src})
 target_link_libraries(simple_payment OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
+add_executable(erc20_transfer "workload/exes/erc20_transfer.cc" ${letus_src})
+target_link_libraries(erc20_transfer OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
 add_executable(microBenchmark "workload/exes/microBenchmark.cc" ${letus_src})
 target_link_libraries(microBenchmark OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
 add_executable(microseqBenchmark "workload/exes/microseqBenchmark.cc" ${letus_src})

@@ -183,8 +183,20 @@ inline Value DiscreteGenerator<Value>::Next() {
 
 class UniformGenerator : public Generator<uint64_t> {
  public:
-  // Both min and max are inclusive
-  UniformGenerator(uint64_t min, uint64_t max) : dist_(min, max) { Next(); }
+  // Both min and max are inclusive. seed == 0 means use
+  // std::mt19937_64::default_seed (5489u) so the generator behaves the
+  // same as before this constructor existed.
+  UniformGenerator(uint64_t min, uint64_t max, uint64_t seed = 0)
+      : generator_(seed == 0 ? std::mt19937_64::default_seed : seed),
+        dist_(min, max) {
+    Next();
+  }
+
+  // Reseed at runtime; seed == 0 reverts to mt19937_64::default_seed.
+  void Seed(uint64_t seed) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    generator_.seed(seed == 0 ? std::mt19937_64::default_seed : seed);
+  }
 
   uint64_t Next();
   uint64_t Last();
