@@ -8,7 +8,6 @@
 #   -a  num_account
 #   -b  load_batch_size
 #   -t  num_txn
-#   -z  txn_batch_size          (split-commit granularity inside a block)
 #   -k  key_len
 #   -m  initial_balance_max     (--initial-balance-max, default 1000000)
 #   -x  max_value               (--max-value, default 100)
@@ -26,8 +25,9 @@ cd ../
 ./build.sh
 
 # 定义测试参数
-db_name=$1
-test_name=$2
+db_name=${1:-letus}
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+test_name=${2:-$TIMESTAMP}
 echo "db_name: $db_name, test_name=$test_name"
 
 # 也可解开注释以同时跑多档 account 规模（与 doc txScaling 思路一致）。
@@ -36,12 +36,11 @@ num_account=(50000000)
 
 # load 阶段
 load_batch_size=100000
-key_size=64
+key_size=32
 
 # txn 阶段（与 doc default 对齐）
-num_txn=80000
-batch_size=4000          # --batch-size: 单个事务/单次提交包含 put 上限
-tx_per_block=1000        # --tx-per-block: 每个 block 的转账笔数
+num_txn=1000000
+tx_per_block=4000        # --tx-per-block: 每个 block 的转账笔数
 
 # 数值参数（与 doc default 对齐，可通过命令行覆盖）
 initial_balance_max=1000000
@@ -55,14 +54,18 @@ cd exps/
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
 result_dir="$PWD/results_${db_name}/simple-payment_${test_name}"
+log_dir="$PWD/logs/test_simple_payment"
+log_file="$log_dir/test_simple_payment_${TIMESTAMP}.log"
 echo "data_path: $data_path"
 echo "index_path: $index_path"
 echo "result_dir: $result_dir"
+echo "log_file: $log_file"
 echo "executable: $EXE"
 
 mkdir -p $data_path
 mkdir -p $index_path
 mkdir -p ${result_dir}
+mkdir -p ${log_dir}
 rm -rf ${result_dir}/*
 
 # 运行测试
@@ -77,17 +80,16 @@ for n_acc in "${num_account[@]}"; do
     result_path="${result_dir}/acc_${n_acc}.csv"
     echo "$(date "+%Y-%m-%d %H:%M:%S")"
     echo "args: n_acc=${n_acc}, load_batch_size=${load_batch_size}, \
-num_txn=${num_txn}, batch_size=${batch_size}, tx_per_block=${tx_per_block}, \
+num_txn=${num_txn}, tx_per_block=${tx_per_block}, \
 key_size=${key_size}, \
 initial_balance_max=${initial_balance_max}, max_value=${max_value}, \
-seed=${seed}"
+seed=${seed}" | tee -a "$log_file"
 
     # 运行测试并写入 CSV（simple_payment 自身会 mkdir -p 父目录）。
     ${EXE} \
         -a ${n_acc} \
         -b ${load_batch_size} \
         -t ${num_txn} \
-        -z ${batch_size} \
         -p ${tx_per_block} \
         -s ${seed} \
         -k ${key_size} \
@@ -95,7 +97,7 @@ seed=${seed}"
         -x ${max_value} \
         -d ${data_path} \
         -i ${index_path} \
-        -r ${result_path}
+        -r ${result_path} | tee -a "$log_file"
 
     sleep 5
     set +x

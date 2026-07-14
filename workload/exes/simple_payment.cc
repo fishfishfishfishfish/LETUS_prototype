@@ -61,7 +61,6 @@ int main(int argc, char** argv) {
   int num_accout = 100000000;  // 40,000,000(40M) 2,000,000(2M)
   int load_batch_size = 20000;
   int num_txn = 10000;
-  int txn_batch_size = 600;
   int tx_per_block = 1000;       // Aligned with doc: --tx-per-block.
   int key_len = 9;
   int value_len = 9;
@@ -73,7 +72,7 @@ int main(int argc, char** argv) {
   std::string result_path = "exps/results/test.csv";
 
   int opt;
-  while ((opt = getopt(argc, argv, "a:b:t:z:k:v:d:i:r:m:x:p:s:")) != -1) {
+  while ((opt = getopt(argc, argv, "a:b:t:k:v:d:i:r:m:x:p:s:")) != -1) {
     switch (opt) {
       case 'a':  // num_accout
       {
@@ -102,17 +101,6 @@ int main(int argc, char** argv) {
         num_txn = strtoul(optarg, &strtolPtr, 10);
         if ((*optarg == '\0') || (*strtolPtr != '\0') || (num_txn <= 0)) {
           std::cerr << "option -t requires a numeric arg\n" << std::endl;
-        }
-        break;
-      }
-
-      case 'z':  // txn_batch_size
-      {
-        char* strtolPtr;
-        txn_batch_size = strtoul(optarg, &strtolPtr, 10);
-        if ((*optarg == '\0') || (*strtolPtr != '\0') ||
-            (txn_batch_size <= 0)) {
-          std::cerr << "option -z requires a numeric arg\n" << std::endl;
         }
         break;
       }
@@ -247,7 +235,7 @@ int main(int argc, char** argv) {
   //   - Skip rules: from/to missing -> skippedNotFound; from < value ->
   //     skippedLowBalance.
   //   - Transfer value uniform in [1, max_value].
-  //   - Puts inside a block are split by batch-size.
+  //   - All puts in a block are committed together (one commit per block).
   //
   // Make sure subsequent reads observe the load balances.
   trie->Commit(version - 1 > 0 ? version - 1 : 1);
@@ -255,18 +243,18 @@ int main(int argc, char** argv) {
 
   // LETUS: 80% of accounts are called 20% of the time,
   //   while the remaining 20% of accounts are called 80% of the time.
-  int random_keys[num_txn * 2];
+  // Hot/cold key selection is done lazily inside the txn loop to avoid
+  // materializing all num_txn*2 account ids in memory.
   UniformGenerator active_judger(0, 1000, seed + 2);  // if access active accounts
   //   80% prob -> front 20% (hot), 20% prob -> remaining 80% (cold).
   UniformGenerator active_key_generator(1, num_accout * 0.2, seed + 3);
   UniformGenerator inactive_key_generator(num_accout * 0.2, num_accout, seed + 4);
-  for (int i = 0; i < num_txn * 2; i++) {
+  auto next_account_idx = [&]() -> uint64_t {
     if (active_judger.Next() < 800) {
-      random_keys[i] = active_key_generator.Next();
-    } else {
-      random_keys[i] = inactive_key_generator.Next();
+      return active_key_generator.Next();
     }
-  }
+    return inactive_key_generator.Next();
+  };
   // Per-doc transfer amount generator: uniform in [1, max_value].
   UniformGenerator amount_gen(1, max_value, seed + 5);
 
@@ -277,14 +265,13 @@ int main(int argc, char** argv) {
   uint64_t block_count = 0;
   auto txn_phase_start = chrono::system_clock::now();
 
-  int txn_key_id = 0;
   int tx_done = 0;
   while (tx_done < num_txn) {
     int entries_in_block = 0;
     std::vector<std::pair<std::string, uint64_t>> block_puts;
     while (entries_in_block < tx_per_block && tx_done < num_txn) {
-      std::string key_send = BuildKeyName(random_keys[txn_key_id++], key_len);
-      std::string key_recv = BuildKeyName(random_keys[txn_key_id++], key_len);
+      std::string key_send = BuildKeyName(next_account_idx(), key_len);
+      std::string key_recv = BuildKeyName(next_account_idx(), key_len);
       total_tx++;
       tx_done++;
       entries_in_block++;
@@ -294,12 +281,18 @@ int main(int argc, char** argv) {
       DMMTrieProof proof_recv = trie->GetProof(0, version - 1, key_recv);
 
       // Skip rule: missing account.
-      if (proof_send.value.empty() || proof_recv.value.empty()) {
-        skipped_not_found++;
-        continue;
+      uint64_t value_send = 0;
+      uint64_t value_recv = 0;
+      if (proof_send.value.empty()){
+        value_send = initial_balance_gen.Next();
+      } else{
+        value_send = DecodeU64LE(proof_send.value);
       }
-      uint64_t value_send = DecodeU64LE(proof_send.value);
-      uint64_t value_recv = DecodeU64LE(proof_recv.value);
+      if (proof_recv.value.empty()){
+        value_recv = initial_balance_gen.Next();
+      } else{
+        value_recv = DecodeU64LE(proof_recv.value);
+      }
 
       // Skip rule: from_balance < value.
       uint64_t value = amount_gen.Next();
@@ -315,15 +308,11 @@ int main(int argc, char** argv) {
     }
     block_count++;
 
-    // Apply the puts, splitting by txn_batch_size.
-    for (size_t i = 0; i < block_puts.size(); i += txn_batch_size) {
-      for (size_t j = i; j < block_puts.size() && j < i + txn_batch_size;
-           j++) {
-        trie->Put(0, version, block_puts[j].first,
-                  EncodeU64LE(block_puts[j].second));
-      }
-      trie->Commit(version);
+    // Apply all puts in this block; commit once per block.
+    for (const auto& kv : block_puts) {
+      trie->Put(0, version, kv.first, EncodeU64LE(kv.second));
     }
+    trie->Commit(version);
 
     std::cout << "block " << block_count << " (version " << version
               << ") entries=" << entries_in_block << ", executed=" << executed_tx

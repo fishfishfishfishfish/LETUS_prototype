@@ -11,7 +11,6 @@
 //   -n num_transactions     (default 10000,    --num-transactions)
 //   -R contract_ratio       (default 0.1,      --contract-ratio)
 //   -b load_batch_size      (default 20000)
-//   -r batch_size           (default 600,      --batch-size)
 //   -p tx_per_block         (default 1000,     --tx-per-block)
 //   -B base_data            (default 0,        --base-data)
 //   -m initial_balance_max  (default 1000000,  --initial-balance-max)
@@ -72,23 +71,32 @@ void Mkdirs(const std::string& path) {
 }
 
 // 16-byte address derived from a uint64 index: BE uint64 zero-padded.
-std::string DeriveAddress(uint64_t idx) {
-  std::string addr(16, '\0');
-  for (int i = 0; i < 8; i++) {
-    // byte 0 is the MSB of the BE-encoded uint64.
-    addr[8 + (7 - i)] = static_cast<char>((idx >> (8 * i)) & 0xff);
+std::string DeriveAddress(uint64_t key_num, int key_len) {
+  std::string key_num_str = std::to_string(key_num);
+  int zeros = key_len/2 - key_num_str.length();
+  zeros = std::max(0, zeros);
+  std::string key_name = "";
+  if (key_num_str.length() >  key_len/2){
+    cout << "DeriveAddress: key_num_str=" << key_num_str << ", key_num=" 
+      << key_num << endl;
   }
-  return addr;
+  return key_name.append(zeros, '0').append(key_num_str);
 }
+
 
 // Composite 39-byte key: "-account" + 16B contract + 16B holder.
 std::string MakeErcKey(const std::string& contract16,
-                       const std::string& holder16) {
-  std::string key = "-account";
+                       const std::string& holder16,
+                       int key_len) {
+  std::string key = "";
   key.append(contract16);
   key.append(holder16);
+  int zeros = key_len - key.size();
+  zeros = std::max(0, zeros);
+  key.append(zeros, '0');
   return key;
 }
+
 
 }  // namespace
 
@@ -97,14 +105,13 @@ int main(int argc, char** argv) {
   int num_txn = 10000;
   double contract_ratio = 0.1;
   int load_batch_size = 20000;
-  int txn_batch_size = 600;
   int tx_per_block = 1000;
   uint64_t base_data = 0;
   uint64_t initial_balance_max = 1000000ULL;
   uint64_t max_value = 100ULL;
   int max_blocks = 0;
   uint64_t seed = 42ULL;
-  int key_len = 39;  // 7 + 16 + 16
+  int key_len = 32;  // 16 + 16
   int value_len = 9;
   std::string data_path = "data/";
   std::string index_path = "index";
@@ -112,7 +119,7 @@ int main(int argc, char** argv) {
 
   int opt;
   while ((opt = getopt(argc, argv,
-                      "a:n:R:b:r:p:B:m:x:M:s:k:v:d:i:o:")) != -1) {
+                      "a:n:R:b:p:B:m:x:M:s:k:v:d:i:o:")) != -1) {
     switch (opt) {
       case 'a':
       {
@@ -149,15 +156,6 @@ int main(int argc, char** argv) {
         load_batch_size = strtoul(optarg, &p, 10);
         if ((*optarg == '\0') || (*p != '\0') || (load_batch_size <= 0)) {
           std::cerr << "option -b requires a positive numeric arg\n";
-        }
-        break;
-      }
-      case 'r':
-      {
-        char* p;
-        txn_batch_size = strtoul(optarg, &p, 10);
-        if ((*optarg == '\0') || (*p != '\0') || (txn_batch_size <= 0)) {
-          std::cerr << "option -r requires a positive numeric arg\n";
         }
         break;
       }
@@ -250,7 +248,6 @@ int main(int argc, char** argv) {
   if (num_holders_pool == 0) num_holders_pool = 1;
   // Per the doc: holders are in [numContracts, numContracts + numHolders).
   uint64_t holder_base = static_cast<uint64_t>(num_contracts);
-  uint64_t holder_ceiling = holder_base + num_holders_pool;
 
   // Init db.
   LSVPS* page_store = new LSVPS(index_path);
@@ -259,46 +256,79 @@ int main(int argc, char** argv) {
   page_store->RegisterTrie(trie);
 
   // Seeded RNGs (offset to avoid overlap across streams).
-  CounterGenerator load_key_counter(0);
   UniformGenerator initial_balance_gen(0, initial_balance_max, seed + 1);
-  UniformGenerator load_holder_gen(holder_base, holder_ceiling - 1,
+  UniformGenerator load_holder_gen(holder_base,
+                                   holder_base + num_holders_pool - 1,
                                    seed + 2);
 
-  // ---- STREAM LOAD PHASE ----
-  int num_load_version = (num_contracts + load_batch_size - 1) / load_batch_size;
+  // ---- STREAM LOAD PHASE (mirrors streamLoadErcBalances in Go) ----
+  // Iterate every (contract, holder) pair, accumulate puts into a single
+  // growing batch, and flush to the trie whenever the batch reaches
+  // `load_batch_size`. Each flush bumps the trie version so the prior
+  // commit is observable. Memory cost stays O(load_batch_size).
   int version = 1;
   std::cout << "load: num_contracts=" << num_contracts
             << ", ercHoldersPer=" << num_holders_pool
-            << ", num_load_versions=" << num_load_version << std::endl;
+            << ", load_batch_size=" << load_batch_size << std::endl;
 
-  for (; version <= num_load_version; version++) {
-    auto start = chrono::system_clock::now();
-    for (int i = 0; i < load_batch_size; i++) {
-      int ci = (version - 1) * load_batch_size + i;
-      if (ci >= num_contracts) break;
-      std::string contract16 = DeriveAddress(static_cast<uint64_t>(ci));
-      for (uint64_t k = 0; k < num_holders_pool; k++) {
-        uint64_t hi = load_holder_gen.Next();
-        std::string holder16 = DeriveAddress(hi);
-        std::string key = MakeErcKey(contract16, holder16);
-        std::string val = EncodeU64LE(initial_balance_gen.Next());
-        trie->Put(0, version, key, val);
+  uint64_t total_written = 0;
+  uint64_t batch_count = 0;
+
+  auto start = chrono::system_clock::now();
+  auto end = chrono::system_clock::now();
+  double load_latency = 0;
+  for (int ci = 0; ci < num_contracts; ci++) {
+    std::string contract16 = DeriveAddress(static_cast<uint64_t>(ci), key_len);
+    for (uint64_t k = 0; k < num_holders_pool; k++) {
+      uint64_t hi = load_holder_gen.Next();
+      std::string holder16 = DeriveAddress(hi, key_len);
+      std::string key = MakeErcKey(contract16, holder16, key_len);
+      std::string val = EncodeU64LE(initial_balance_gen.Next());
+      // Put writes only to the in-memory cache; only Commit triggers IO,
+      // so we can issue every Put immediately and Commit once per batch.
+      trie->Put(0, version, key, val);
+      ++total_written;
+      ++batch_count;
+
+      if (static_cast<int>(batch_count) >= load_batch_size) {
+        trie->Commit(version);
+        end = chrono::system_clock::now();
+        auto duration =
+          double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
+            chrono::microseconds::period::num /
+            chrono::microseconds::period::den;
+        load_latency += duration;
+        if ((version) % 1000 == 0) {
+          std::cout << "load version " << version
+                    << " batch size=" << batch_count
+                    << " latency:" << duration << std::endl;
+        }
+        start = chrono::system_clock::now();
+        version++;
+        batch_count = 0;
       }
     }
-    trie->Commit(version);
-    auto end = chrono::system_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
-    double load_latency = double(duration.count()) *
-                          chrono::microseconds::period::num /
-                          chrono::microseconds::period::den;
-    std::cout << "load version " << version
-              << " latency:" << load_latency << std::endl;
   }
-  trie->Commit(version - 1 > 0 ? version - 1 : 1);
-  int load_done_version = num_load_version + 1;
-  version = load_done_version;
+  // Commit the tail (may be smaller than load_batch_size).
+  if (batch_count > 0) {
+    trie->Commit(version);
+    end = chrono::system_clock::now();
+    auto duration =
+      double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
+        chrono::microseconds::period::num /
+        chrono::microseconds::period::den;
+    load_latency += duration;
+    start = chrono::system_clock::now();
+    version++;
+    batch_count = 0;
+  }
+  // Final commit on the last version to guarantee visibility of the tail
+  // batch; Put/Commit already handle same-version re-commits safely.
+  int load_done_version = version;
 
-  std::cout << "load done; entering txn phase at version " << version
+  std::cout << "load done; seeded " << total_written
+            << " balances, entering txn phase at version " << version
+            << ", load latency=" << load_latency << "us"
             << std::endl;
 
   // ---- TXN RUN PHASE (block-streamed, skip-aware, CSV) ----
@@ -309,11 +339,49 @@ int main(int argc, char** argv) {
   uint64_t block_count = 0;
   auto txn_phase_start = chrono::system_clock::now();
 
-  UniformGenerator contract_gen(0,
-                                 static_cast<uint64_t>(num_contracts - 1),
-                                 seed + 3);
-  UniformGenerator holder_gen(holder_base, holder_ceiling - 1, seed + 4);
+  // Hot/cold holder selection: 80% prob -> front 20% of holders (hot),
+  // 20% prob -> remaining 80% (cold). Drawn lazily to avoid buffering
+  // num_txn*2 holder indices.
+  UniformGenerator active_judger(0, 1000, seed + 2);
+    // Hot pool sits within the ERC holder range so picks are guaranteed to
+  // be valid addresses (avoid relying on --num-accounts scaling the
+  // address index space).
+  uint64_t contract_hot_ceiling =
+      num_contracts * 0.2 > 0 ? num_contracts * 0.2 : 1;
+  if (contract_hot_ceiling > (holder_base-1)) contract_hot_ceiling = (holder_base-1);
+  UniformGenerator active_contract_key_generator(0,
+                                               contract_hot_ceiling - 1,
+                                               seed + 3);
+  UniformGenerator inactive_contract_key_generator(contract_hot_ceiling,
+                                                 holder_base - 1,
+                                                 seed + 4);
+  auto next_contract_idx = [&]() -> uint64_t {
+    if (active_judger.Next() < 800) {
+      return active_contract_key_generator.Next();
+    }
+    return inactive_contract_key_generator.Next();
+  };
+  // Hot pool sits within the ERC holder range so picks are guaranteed to
+  // be valid addresses (avoid relying on --num-accounts scaling the
+  // address index space).
+  uint64_t holder_hot_ceiling =
+      holder_base + (num_holders_pool * 0.2 > 0 ? num_holders_pool * 0.2 : 1);
+  if (holder_hot_ceiling > num_accout) holder_hot_ceiling = num_accout;
+  UniformGenerator active_holder_key_generator(holder_base,
+                                               holder_hot_ceiling - 1,
+                                               seed + 5);
+  UniformGenerator inactive_holder_key_generator(holder_hot_ceiling,
+                                                 num_accout - 1,
+                                                 seed + 6);
+  auto next_holder_idx = [&]() -> uint64_t {
+    if (active_judger.Next() < 800) {
+      return active_holder_key_generator.Next();
+    }
+    return inactive_holder_key_generator.Next();
+  };
+
   UniformGenerator amount_gen(1, max_value, seed + 5);
+
 
   int tx_done = 0;
 
@@ -321,22 +389,23 @@ int main(int argc, char** argv) {
     std::vector<std::pair<std::string, uint64_t>> block_puts;
     int entries_in_block = 0;
     while (entries_in_block < tx_per_block && tx_done < num_txn) {
-      uint64_t ci = contract_gen.Next();
-      std::string contract16 = DeriveAddress(ci);
+      uint64_t ci = next_contract_idx();
+      std::string contract16 = DeriveAddress(ci, key_len);
 
-      uint64_t hi_from = holder_gen.Next();
-      uint64_t hi_to;
+      uint64_t hi_from = next_holder_idx();
+      uint64_t hi_to = next_holder_idx();
+      // Tiny rejection-sampling loop to keep from != to.
       int retries = 0;
-      do {
-        hi_to = holder_gen.Next();
+      while (hi_to == hi_from && retries < 16) {
+        hi_to = next_holder_idx();
         ++retries;
-      } while (hi_to == hi_from && retries < 16);
+      }
       if (hi_to == hi_from) hi_to = (hi_from + 1) % num_holders_pool;
 
-      std::string from_addr = DeriveAddress(hi_from);
-      std::string to_addr = DeriveAddress(hi_to);
-      std::string key_from = MakeErcKey(contract16, from_addr);
-      std::string key_to = MakeErcKey(contract16, to_addr);
+      std::string from_addr = DeriveAddress(hi_from, key_len);
+      std::string to_addr = DeriveAddress(hi_to, key_len);
+      std::string key_from = MakeErcKey(contract16, from_addr, key_len);
+      std::string key_to = MakeErcKey(contract16, to_addr, key_len);
 
       total_tx++;
       tx_done++;
@@ -347,12 +416,18 @@ int main(int argc, char** argv) {
       DMMTrieProof proof_to = trie->GetProof(0, version - 1, key_to);
 
       // Skip rule 1+2: missing (contract, holder) pair.
-      if (proof_from.value.empty() || proof_to.value.empty()) {
-        skipped_not_found++;
-        continue;
+      uint64_t bal_from = 0;
+      uint64_t bal_to = 0;
+      if (proof_from.value.empty()){
+        bal_from = initial_balance_gen.Next();
+      } else{
+        bal_from = DecodeU64LE(proof_from.value);
       }
-      uint64_t bal_from = DecodeU64LE(proof_from.value);
-      uint64_t bal_to = DecodeU64LE(proof_to.value);
+      if (proof_to.value.empty()){
+        bal_to = initial_balance_gen.Next();
+      } else{
+         bal_to = DecodeU64LE(proof_to.value);
+      }
 
       // Skip rule 3: from_balance < value.
       uint64_t value = amount_gen.Next();
@@ -368,24 +443,33 @@ int main(int argc, char** argv) {
     }
     block_count++;
 
-    // Apply puts in --batch-size splits; commit once per split.
-    for (size_t i = 0; i < block_puts.size(); i += txn_batch_size) {
-      for (size_t j = i; j < block_puts.size() && j < i + txn_batch_size;
-           j++) {
-        trie->Put(0, version, block_puts[j].first,
-                  EncodeU64LE(block_puts[j].second));
-      }
-      trie->Commit(version);
+    // Apply all puts in this block; commit once per block.
+    for (const auto& kv : block_puts) {
+      trie->Put(0, version, kv.first, EncodeU64LE(kv.second));
     }
+    trie->Commit(version);
 
     if (max_blocks > 0 && static_cast<int>(block_count) >= max_blocks) {
+      std::cout << "max_blocks reached, stop" << std::endl;
       break;
     }
+    auto tmp_phase_end = chrono::system_clock::now();
+    double tmp_elapsed =
+      chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
+                                                  txn_phase_start)
+          .count() *
+      chrono::microseconds::period::num /
+      chrono::microseconds::period::den;
+    double tmp_throughput =
+      (tmp_elapsed > 0) ? static_cast<double>(executed_tx) / tmp_elapsed : 0.0;
     std::cout << "block " << block_count << " (version " << version
               << ") entries=" << entries_in_block
               << " executed=" << executed_tx
               << " skippedNotFound=" << skipped_not_found
-              << " skippedLowBalance=" << skipped_low_balance << std::endl;
+              << " skippedLowBalance=" << skipped_low_balance 
+              << " tmp_elapsed=" << tmp_elapsed
+              << " tmp_throughput=" << tmp_throughput
+              << std::endl;
     version++;
   }
 

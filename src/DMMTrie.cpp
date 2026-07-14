@@ -1096,7 +1096,7 @@ string DMMTrie::Get(uint64_t tid, uint64_t version, const string &key) {
     BasePage *page =
         GetPage({page_version, 0, false, pid});  // false means basepage
     if (page == nullptr || page->GetRoot() == nullptr) {
-      cout << "Key " << key << " not found at version " << version << endl;
+      // cout << "Key " << key << " not found at version " << version << endl;
       return "";
     }
 
@@ -1286,6 +1286,11 @@ void DMMTrie::CalcRootHash(uint64_t tid, uint64_t version) {
     delete pair.second;
   }
   page_cache_.clear();
+  // Drain the per-Commit put buffer: every Put(...) has been persisted
+  // into a (base|delta) page above, so the cache is no longer needed.
+  // Without this, put_cache_ grows unbounded across txn-phase commits
+  // (each block writes thousands of entries that are never released
+  // until Flush() or destruction), eventually OOM-killing the process.
   put_cache_.clear();
 #ifdef DEBUG
   cout << "Version " << version << " committed" << endl;
@@ -1327,14 +1332,14 @@ DMMTrieProof DMMTrie::GetProof(uint64_t tid, uint64_t version,
     BasePage *page =
         GetPage({page_version, 0, false, pid});  // false means basepage
     if (page == nullptr || page->GetRoot() == nullptr) {
-      cout << "Key " << key << " not found at version " << version << endl;
+      // cout << "Key " << key << " not found at version " << version << endl;
       merkle_proof.value = "";
       return merkle_proof;
     }
 
     if (!page->GetRoot()->IsLeaf()) {
       if (!page->GetRoot()->HasChild(GetIndex(nibble_path[i]))) {
-        cout << "Key " << key << " not found at version " << version << endl;
+        // cout << "Key " << key << " not found at version " << version << endl;
         merkle_proof.value = "";
         return merkle_proof;
       }
