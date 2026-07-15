@@ -338,7 +338,7 @@ int main(int argc, char** argv) {
   uint64_t skipped_low_balance = 0;
   uint64_t block_count = 0;
   auto txn_phase_start = chrono::system_clock::now();
-
+  
   // Hot/cold holder selection: 80% prob -> front 20% of holders (hot),
   // 20% prob -> remaining 80% (cold). Drawn lazily to avoid buffering
   // num_txn*2 holder indices.
@@ -384,7 +384,7 @@ int main(int argc, char** argv) {
 
 
   int tx_done = 0;
-
+  double txn_elapsed = 0.0;
   while (tx_done < num_txn) {
     std::vector<std::pair<std::string, uint64_t>> block_puts;
     int entries_in_block = 0;
@@ -444,24 +444,26 @@ int main(int argc, char** argv) {
     block_count++;
 
     // Apply all puts in this block; commit once per block.
+    auto tmp_phase_start = chrono::system_clock::now();
     for (const auto& kv : block_puts) {
       trie->Put(0, version, kv.first, EncodeU64LE(kv.second));
     }
     trie->Commit(version);
+    auto tmp_phase_end = chrono::system_clock::now();
+    double tmp_elapsed =
+      chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
+                                                  tmp_phase_start)
+          .count() *
+      chrono::microseconds::period::num /
+      chrono::microseconds::period::den;
+    txn_elapsed += tmp_elapsed;
 
     if (max_blocks > 0 && static_cast<int>(block_count) >= max_blocks) {
       std::cout << "max_blocks reached, stop" << std::endl;
       break;
     }
-    auto tmp_phase_end = chrono::system_clock::now();
-    double tmp_elapsed =
-      chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
-                                                  txn_phase_start)
-          .count() *
-      chrono::microseconds::period::num /
-      chrono::microseconds::period::den;
     double tmp_throughput =
-      (tmp_elapsed > 0) ? static_cast<double>(executed_tx) / tmp_elapsed : 0.0;
+      (txn_elapsed > 0) ? static_cast<double>(executed_tx) / txn_elapsed : 0.0;
     std::cout << "block " << block_count << " (version " << version
               << ") entries=" << entries_in_block
               << " executed=" << executed_tx
@@ -474,7 +476,7 @@ int main(int argc, char** argv) {
   }
 
   auto txn_phase_end = chrono::system_clock::now();
-  double txn_elapsed =
+  double total_txn_elapsed =
       chrono::duration_cast<chrono::microseconds>(txn_phase_end -
                                                   txn_phase_start)
           .count() *

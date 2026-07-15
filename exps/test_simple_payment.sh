@@ -30,9 +30,30 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 test_name=${2:-$TIMESTAMP}
 echo "db_name: $db_name, test_name=$test_name"
 
-# 也可解开注释以同时跑多档 account 规模（与 doc txScaling 思路一致）。
-# num_account=(50000000 100000000 250000000 500000000)
-num_account=(50000000)
+# ---------------------------------------------------------------------------
+# Helper: convert scientific notation to integer
+#   5e7  -> 50000000
+#   1e8  -> 100000000
+#   1e9  -> 1000000000
+# Plain integers are passed through unchanged.
+# ---------------------------------------------------------------------------
+parse_int() {
+    local s="$1"
+    # Use python if available (most portable for scientific notation).
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "import sys; print(int(float(sys.argv[1])))" "$s"
+        return
+    fi
+    if command -v bc >/dev/null 2>&1; then
+        printf "%.0f\n" "$(echo "$s" | bc -l)"
+        return
+    fi
+    # Fallback: awk
+    awk -v s="$s" 'BEGIN { printf("%.0f\n", s + 0) }'
+}
+
+scales=("5e7" "1e8" "5e8" "1e9")
+# scales=("1e8" "5e8" "1e9")
 
 # load 阶段
 load_batch_size=100000
@@ -54,8 +75,7 @@ cd exps/
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
 result_dir="$PWD/results_${db_name}/simple-payment_${test_name}"
-log_dir="$PWD/logs/test_simple_payment"
-log_file="$log_dir/test_simple_payment_${TIMESTAMP}.log"
+log_dir="$PWD/logs/test_simple_payment_${test_name}"
 echo "data_path: $data_path"
 echo "index_path: $index_path"
 echo "result_dir: $result_dir"
@@ -69,15 +89,17 @@ mkdir -p ${log_dir}
 rm -rf ${result_dir}/*
 
 # 运行测试
-for n_acc in "${num_account[@]}"; do
-    set -x
+for scale in "${scales[@]}"; do
+    n_acc=$(parse_int "$scale")
+    # set -x
     # 清理数据文件夹
     rm -rf $data_path
     mkdir -p $data_path
     rm -rf $index_path
     mkdir -p $index_path
 
-    result_path="${result_dir}/acc_${n_acc}.csv"
+    result_path="${result_dir}/acc_${scale}.csv"
+    log_file="$log_dir/test_simple_payment_acc_${scale}.log"
     echo "$(date "+%Y-%m-%d %H:%M:%S")"
     echo "args: n_acc=${n_acc}, load_batch_size=${load_batch_size}, \
 num_txn=${num_txn}, tx_per_block=${tx_per_block}, \

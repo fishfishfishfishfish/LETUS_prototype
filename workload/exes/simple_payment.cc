@@ -266,6 +266,7 @@ int main(int argc, char** argv) {
   auto txn_phase_start = chrono::system_clock::now();
 
   int tx_done = 0;
+  double txn_elapsed = 0.0;
   while (tx_done < num_txn) {
     int entries_in_block = 0;
     std::vector<std::pair<std::string, uint64_t>> block_puts;
@@ -308,11 +309,20 @@ int main(int argc, char** argv) {
     }
     block_count++;
 
+    auto tmp_phase_start = chrono::system_clock::now();
     // Apply all puts in this block; commit once per block.
     for (const auto& kv : block_puts) {
       trie->Put(0, version, kv.first, EncodeU64LE(kv.second));
     }
     trie->Commit(version);
+    auto tmp_phase_end = chrono::system_clock::now();
+    double tmp_elapsed =
+      chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
+                                                  tmp_phase_start)
+          .count() *
+      chrono::microseconds::period::num /
+      chrono::microseconds::period::den;
+    txn_elapsed += tmp_elapsed;
 
     std::cout << "block " << block_count << " (version " << version
               << ") entries=" << entries_in_block << ", executed=" << executed_tx
@@ -321,7 +331,7 @@ int main(int argc, char** argv) {
     version++;
   }
   auto txn_phase_end = chrono::system_clock::now();
-  double txn_elapsed =
+  double total_txn_elapsed =
       chrono::duration_cast<chrono::microseconds>(txn_phase_end -
                                                   txn_phase_start)
           .count() *
