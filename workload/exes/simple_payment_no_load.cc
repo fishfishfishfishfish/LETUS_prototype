@@ -2,8 +2,11 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <execinfo.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -16,6 +19,35 @@
 #include "generator.hpp"
 
 namespace {
+
+// Print a bounded backtrace to stderr so we can localize crashes that
+// bypass the C++ exception path (segfault, stack overflow, abort).
+void PrintStackTrace(int max_frames = 32) {
+  void* buf[32];
+  int n = std::min(max_frames, 32);
+  n = backtrace(buf, n);
+  std::cerr << "backtrace(" << n << " frames):" << std::endl;
+  backtrace_symbols_fd(buf, n, STDERR_FILENO);
+}
+
+// Signal handler: catch segfault/stack overflow/abort before the OS prints
+// something cryptic. Just logs and re-raises the default handler so a
+// core dump / clean exit still happens.
+void OnFatalSignal(int sig) {
+  std::cerr << "FATAL: received signal " << sig
+            << " (likely segfault/stack overflow/abort)" << std::endl;
+  PrintStackTrace();
+  std::cerr.flush();
+  std::signal(sig, SIG_DFL);
+  std::raise(sig);
+}
+
+void InstallSignalHandlers() {
+  std::signal(SIGSEGV, OnFatalSignal);
+  std::signal(SIGABRT, OnFatalSignal);
+  std::signal(SIGFPE,  OnFatalSignal);
+  std::signal(SIGBUS,  OnFatalSignal);
+}
 
 // Value encoding: uint64 little-endian, fixed 8 bytes (per txBenchmark_doc_zh.md).
 std::string EncodeU64LE(uint64_t v) {
@@ -58,9 +90,13 @@ std::string BuildKeyName(uint64_t key_num, int key_len) {
 }
 
 int main(int argc, char** argv) {
+  // Install handlers early so segfaults in setup are also captured.
+  InstallSignalHandlers();
+
+  try {
   int num_accout = 100000000;  // 40,000,000(40M) 2,000,000(2M)
   int load_batch_size = 20000;
-  int num_txn = 10000;
+  uint64_t num_txn = 36029300000ULL;
   int tx_per_block = 1000;       // Aligned with doc: --tx-per-block.
   int key_len = 9;
   int value_len = 9;
@@ -197,37 +233,17 @@ int main(int argc, char** argv) {
   DMMTrie* trie = new DMMTrie(0, page_store, value_store);
   page_store->RegisterTrie(trie);
 
-  // load data
-  int num_load_version = num_accout / load_batch_size;
+  // ---- LOAD PHASE DISABLED ----
+  // Start txn phase on an empty trie; version begins at 1 (no prior commits).
   int version = 1;
-  CounterGenerator key_generator(1);
   // Per doc: initial balance is uniform in [0, initial_balance_max].
   // All RandomGenerators are seeded with --seed (doc: --seed) so the
   // workload is reproducible. Each one gets a distinct seed so the streams
   // do not overlap.
   UniformGenerator initial_balance_gen(0, initial_balance_max, seed + 1);
-  for (; version <= num_load_version; version++) {
-    auto start = chrono::system_clock::now();
-    for (int i = 0; i < load_batch_size; i++) {
-      std::string key = BuildKeyName(key_generator.Next(), key_len);
-      // uint64 little-endian, fixed 8 bytes (doc).
-      std::string val = EncodeU64LE(initial_balance_gen.Next());
-      trie->Put(0, version, key, val);
-    }
-    trie->Commit(version);
-    auto end = chrono::system_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
-    double load_latency = double(duration.count()) *
-                          chrono::microseconds::period::num /
-                          chrono::microseconds::period::den;
-    std::cout << "version " << version << ", load latnecy:" << load_latency
-              << ","
-              << "put throughput:" << load_batch_size / load_latency
-              << std::endl;
-  }
-
-  std::cout << "load " << num_accout << " accounts, current version is "
+  std::cout << "load phase disabled; entering txn phase on empty trie at version "
             << version << std::endl;
+
   // transaction
   // Per txBenchmark_doc_zh.md:
   //   - generate tx-per-block entries at a time, immediately execute the
@@ -236,10 +252,6 @@ int main(int argc, char** argv) {
   //     skippedLowBalance.
   //   - Transfer value uniform in [1, max_value].
   //   - All puts in a block are committed together (one commit per block).
-  //
-  // Make sure subsequent reads observe the load balances.
-  trie->Commit(version - 1 > 0 ? version - 1 : 1);
-  version = num_load_version + 1;  // next version id = first txn version.
 
   // LETUS: 80% of accounts are called 20% of the time,
   //   while the remaining 20% of accounts are called 80% of the time.
@@ -319,15 +331,30 @@ int main(int argc, char** argv) {
     double tmp_elapsed =
       chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
                                                   tmp_phase_start)
-          .count() * 1.0 *
+          .count() * 1.0 * 
       chrono::microseconds::period::num /
       chrono::microseconds::period::den;
     txn_elapsed += tmp_elapsed;
+    // txn_elapsed =
+    //   chrono::duration_cast<chrono::microseconds>(tmp_phase_end -
+    //                                               txn_phase_start)
+    //       .count() *
+    //   chrono::microseconds::period::num /
+    //   chrono::microseconds::period::den;
+    double tmp_throughput =
+      (txn_elapsed > 0) ? static_cast<double>(executed_tx) / txn_elapsed : 0.0;
 
-    std::cout << "block " << block_count << " (version " << version
-              << ") entries=" << entries_in_block << ", executed=" << executed_tx
-              << ", skippedNotFound=" << skipped_not_found
-              << ", skippedLowBalance=" << skipped_low_balance << std::endl;
+    if(block_count % 2000 == 0 || (block_count >= 9790 && block_count <= 9810)){
+      std::cout << "block " << block_count << " (version " << version
+                << ") entries=" << entries_in_block
+                << " executed=" << executed_tx
+                << " skippedNotFound=" << skipped_not_found
+                << " skippedLowBalance=" << skipped_low_balance 
+                << " txn_elapsed=" << txn_elapsed
+                << " tmp_elapsed=" << tmp_elapsed
+                << " tmp_throughput=" << tmp_throughput
+                << std::endl;
+    }
     version++;
   }
   auto txn_phase_end = chrono::system_clock::now();
@@ -352,12 +379,21 @@ int main(int argc, char** argv) {
     }
     std::ofstream out(result_path);
     out << "TotalTx,ExecutedTx,SkippedNotFound,SkippedLowBalance,BlockCount,"
-           "Elapsed(s),Throughput\n";
+           "TxnElapsed(s),TotalElapsed(s),Throughput\n";
     out << total_tx << "," << executed_tx << "," << skipped_not_found << ","
         << skipped_low_balance << "," << block_count << "," << txn_elapsed
-        << "," << throughput << "\n";
+        << "," << total_txn_elapsed << "," << " " << throughput << "\n";
     std::cout << "result written to " << result_path << std::endl;
   }
 
   return true;
+  } catch (const std::exception& e) {
+    std::cerr << "FATAL: " << e.what() << std::endl;
+    PrintStackTrace();
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "FATAL: non-std exception" << std::endl;
+    PrintStackTrace();
+    return EXIT_FAILURE;
+  }
 }

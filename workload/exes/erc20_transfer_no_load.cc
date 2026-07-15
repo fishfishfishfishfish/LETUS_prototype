@@ -102,7 +102,7 @@ std::string MakeErcKey(const std::string& contract16,
 
 int main(int argc, char** argv) {
   int num_accout = 100000000;
-  int num_txn = 10000;
+  uint64_t num_txn = 36029300000ULL;
   double contract_ratio = 0.1;
   int load_batch_size = 20000;
   int tx_per_block = 1000;
@@ -257,79 +257,12 @@ int main(int argc, char** argv) {
 
   // Seeded RNGs (offset to avoid overlap across streams).
   UniformGenerator initial_balance_gen(0, initial_balance_max, seed + 1);
-  UniformGenerator load_holder_gen(holder_base,
-                                   holder_base + num_holders_pool - 1,
-                                   seed + 2);
 
-  // ---- STREAM LOAD PHASE (mirrors streamLoadErcBalances in Go) ----
-  // Iterate every (contract, holder) pair, accumulate puts into a single
-  // growing batch, and flush to the trie whenever the batch reaches
-  // `load_batch_size`. Each flush bumps the trie version so the prior
-  // commit is observable. Memory cost stays O(load_batch_size).
+  // ---- LOAD PHASE DISABLED ----
+  // Start txn phase on an empty trie; version begins at 1 (no prior commits).
   int version = 1;
-  std::cout << "load: num_contracts=" << num_contracts
-            << ", ercHoldersPer=" << num_holders_pool
-            << ", load_batch_size=" << load_batch_size << std::endl;
-
-  uint64_t total_written = 0;
-  uint64_t batch_count = 0;
-
-  auto start = chrono::system_clock::now();
-  auto end = chrono::system_clock::now();
-  double load_latency = 0;
-  for (int ci = 0; ci < num_contracts; ci++) {
-    std::string contract16 = DeriveAddress(static_cast<uint64_t>(ci), key_len);
-    for (uint64_t k = 0; k < num_holders_pool; k++) {
-      uint64_t hi = load_holder_gen.Next();
-      std::string holder16 = DeriveAddress(hi, key_len);
-      std::string key = MakeErcKey(contract16, holder16, key_len);
-      std::string val = EncodeU64LE(initial_balance_gen.Next());
-      // Put writes only to the in-memory cache; only Commit triggers IO,
-      // so we can issue every Put immediately and Commit once per batch.
-      trie->Put(0, version, key, val);
-      ++total_written;
-      ++batch_count;
-
-      if (static_cast<int>(batch_count) >= load_batch_size) {
-        trie->Commit(version);
-        end = chrono::system_clock::now();
-        auto duration =
-          double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
-            chrono::microseconds::period::num /
-            chrono::microseconds::period::den;
-        load_latency += duration;
-        if ((version) % 1000 == 0) {
-          std::cout << "load version " << version
-                    << " batch size=" << batch_count
-                    << " latency:" << duration << std::endl;
-        }
-        start = chrono::system_clock::now();
-        version++;
-        batch_count = 0;
-      }
-    }
-  }
-  // Commit the tail (may be smaller than load_batch_size).
-  if (batch_count > 0) {
-    trie->Commit(version);
-    end = chrono::system_clock::now();
-    auto duration =
-      double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
-        chrono::microseconds::period::num /
-        chrono::microseconds::period::den;
-    load_latency += duration;
-    start = chrono::system_clock::now();
-    version++;
-    batch_count = 0;
-  }
-  // Final commit on the last version to guarantee visibility of the tail
-  // batch; Put/Commit already handle same-version re-commits safely.
-  int load_done_version = version;
-
-  std::cout << "load done; seeded " << total_written
-            << " balances, entering txn phase at version " << version
-            << ", load latency=" << load_latency << "us"
-            << std::endl;
+  std::cout << "load phase disabled; entering txn phase on empty trie at version "
+            << version << std::endl;
 
   // ---- TXN RUN PHASE (block-streamed, skip-aware, CSV) ----
   uint64_t total_tx = 0;
@@ -464,14 +397,17 @@ int main(int argc, char** argv) {
     }
     double tmp_throughput =
       (txn_elapsed > 0) ? static_cast<double>(executed_tx) / txn_elapsed : 0.0;
-    std::cout << "block " << block_count << " (version " << version
-              << ") entries=" << entries_in_block
-              << " executed=" << executed_tx
-              << " skippedNotFound=" << skipped_not_found
-              << " skippedLowBalance=" << skipped_low_balance 
-              << " tmp_elapsed=" << tmp_elapsed
-              << " tmp_throughput=" << tmp_throughput
-              << std::endl;
+
+    if(block_count % 1000 == 0){
+      std::cout << "block " << block_count << " (version " << version
+                << ") entries=" << entries_in_block
+                << " executed=" << executed_tx
+                << " skippedNotFound=" << skipped_not_found
+                << " skippedLowBalance=" << skipped_low_balance 
+                << " tmp_elapsed=" << tmp_elapsed
+                << " tmp_throughput=" << tmp_throughput
+                << std::endl;
+    }
     version++;
   }
 
@@ -496,10 +432,10 @@ int main(int argc, char** argv) {
     }
     std::ofstream out(result_path);
     out << "TotalTx,ExecutedTx,SkippedNotFound,SkippedLowBalance,BlockCount,"
-           "Elapsed(s),Throughput\n";
+           "TxnElapsed(s),TotalElapsed(s),Throughput\n";
     out << total_tx << "," << executed_tx << "," << skipped_not_found << ","
         << skipped_low_balance << "," << block_count << "," << txn_elapsed
-        << "," << throughput << "\n";
+        << "," << total_txn_elapsed << "," << " " << throughput << "\n";
     std::cout << "result written to " << result_path << std::endl;
   }
 

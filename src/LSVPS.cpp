@@ -35,10 +35,10 @@ bool IndexBlock::SerializeTo(std::ofstream &out) const {
     std::streampos startPos = out.tellp();
     // 写入 mappings 数量
     uint32_t count = static_cast<uint32_t>(mappings_.size());
-#ifdef DEBUG
-    std::cout << "Serializing IndexBlock with " << count << " mappings"
-              << std::endl;
-#endif
+// #ifdef DEBUG
+//     std::cout << "Serializing IndexBlock with " << count << " mappings"
+//               << std::endl;
+// #endif
     if (count > MAPPINGS_PER_BLOCK) {
       std::cerr << "Error: count exceeds MAPPINGS_PER_BLOCK" << std::endl;
       return false;
@@ -92,9 +92,9 @@ bool IndexBlock::Deserialize(std::ifstream &in) {
     std::streampos startPos = in.tellg();
     uint32_t count = 0;
     in.read(reinterpret_cast<char *>(&count), sizeof(count));
-#ifdef DEBUG
-    std::cout << "Deserializing IndexBlock with count: " << count << std::endl;
-#endif
+// #ifdef DEBUG
+//     std::cout << "Deserializing IndexBlock with count: " << count << std::endl;
+// #endif
     if (!in.good()) {
       std::cerr << "Error reading count" << std::endl;
       return false;
@@ -406,13 +406,13 @@ Page *LSVPS::readPageFromIndexFile(
   if (lookup_block.entries.empty()) {
     return nullptr;
   }
-#ifdef DEBUG
-  std::cout << "Searching for pagekey: " << pagekey << std::endl;
-  std::cout << "First entry in lookup_block: "
-            << lookup_block.entries.front().first << std::endl;
-  std::cout << "Last entry in lookup_block: "
-            << lookup_block.entries.back().first << std::endl;
-#endif
+// #ifdef DEBUG
+//   std::cout << "Searching for pagekey: " << pagekey << std::endl;
+//   std::cout << "First entry in lookup_block: "
+//             << lookup_block.entries.front().first << std::endl;
+//   std::cout << "Last entry in lookup_block: "
+//             << lookup_block.entries.back().first << std::endl;
+// #endif
   // 使用自定义比较来找到第一个大于 pagekey 的元素
   auto it = std::upper_bound(
       lookup_block.entries.begin(), lookup_block.entries.end(),
