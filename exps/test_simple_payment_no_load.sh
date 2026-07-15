@@ -22,10 +22,10 @@ export ASAN_OPTIONS=detect_leaks=0
 
 # 编译项目
 cd ../
-./build.sh --build-type debug --cxx g++
-BIN_DIR="../build_debug_letus/bin"
-# ./build.sh
-# BIN_DIR="../build_release_letus/bin"
+# ./build.sh --build-type debug --cxx g++
+# BIN_DIR="../build_debug_letus/bin"
+./build.sh
+BIN_DIR="../build_release_letus/bin"
 EXE="${BIN_DIR}/simple_payment_no_load"
 
 
