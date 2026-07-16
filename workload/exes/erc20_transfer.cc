@@ -257,9 +257,11 @@ int main(int argc, char** argv) {
 
   // Seeded RNGs (offset to avoid overlap across streams).
   UniformGenerator initial_balance_gen(0, initial_balance_max, seed + 1);
-  UniformGenerator load_holder_gen(holder_base,
-                                   holder_base + num_holders_pool - 1,
-                                   seed + 2);
+  // UniformGenerator load_holder_gen(holder_base,
+  //                                  holder_base + num_holders_pool - 1,
+  //                                  seed + 2);
+  cout << "using CounterGenerator to generate holder ids" << endl;
+  CounterGenerator load_holder_gen(holder_base, holder_base + num_holders_pool - 1);
 
   // ---- STREAM LOAD PHASE (mirrors streamLoadErcBalances in Go) ----
   // Iterate every (contract, holder) pair, accumulate puts into a single
@@ -278,6 +280,7 @@ int main(int argc, char** argv) {
   auto end = chrono::system_clock::now();
   double load_latency = 0;
   for (int ci = 0; ci < num_contracts; ci++) {
+    load_holder_gen.Set(holder_base + num_holders_pool - 1);
     std::string contract16 = DeriveAddress(static_cast<uint64_t>(ci), key_len);
     for (uint64_t k = 0; k < num_holders_pool; k++) {
       uint64_t hi = load_holder_gen.Next();

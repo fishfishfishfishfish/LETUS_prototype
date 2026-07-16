@@ -58,7 +58,7 @@ parse_int() {
 # num_account=(10000000 100000000 1000000000)
 # num_account=(10000000)
 # scales=("5e4" "1e7" "5e7" "1e8" "5e8" "1e9")
-scales=("1e7" "5e7" "1e8" "5e8" "1e9")
+scales=("5e8" "1e7" "5e7" "1e8" "1e9")
 
 # load 阶段
 load_batch_size=5000

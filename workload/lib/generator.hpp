@@ -130,13 +130,23 @@ inline uint64_t ZipfianGenerator::Last() {
 
 class CounterGenerator : public Generator<uint64_t> {
  public:
-  CounterGenerator(uint64_t start) : counter_(start) {}
-  uint64_t Next() { return counter_.fetch_add(1); }
-  uint64_t Last() { return counter_.load() - 1; }
-  void Set(uint64_t start) { counter_.store(start); }
+  CounterGenerator(uint64_t start, uint64_t end=UINT64_MAX) : 
+    counter_(start), start_(start), range_(end - start) {}
+  uint64_t Next() { 
+    return counter_.fetch_add(1) % range_ + start_; 
+  }
+  uint64_t Last() { 
+    return counter_.load() % range_ + start_; 
+  }
+  void Set(uint64_t start) { 
+    start_ = start;
+    counter_.store(0); 
+  }
 
  private:
   std::atomic<uint64_t> counter_;
+  uint64_t start_;
+  uint64_t range_;
 };
 
 template <typename Value>
