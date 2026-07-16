@@ -58,7 +58,7 @@ parse_int() {
 # num_account=(10000000 100000000 1000000000)
 # num_account=(10000000)
 # scales=("5e4" "1e7" "5e7" "1e8" "5e8" "1e9")
-scales=("1e7" "5e7" "1e8" "5e8" "1e9")
+scales=("5e7" "1e8" "5e8" "1e9")
 
 # load 阶段
 load_batch_size=5000
@@ -75,7 +75,7 @@ key_size=32
 # etherscan: number of transactions 3602930000
 # etherscan: number of blocks 25534374
 num_txn=3602930000
-tx_per_block=150 # ~3602930000/25534374
+tx_per_block=4000 # ~3602930000/25534374
 max_blocks=0
 
 # 数值参数（与 doc default 对齐，可通过命令行覆盖）
@@ -89,8 +89,8 @@ EXE="${BIN_DIR}/erc20_transfer_no_load"
 cd exps/
 data_path="$PWD/../data/"
 index_path="$PWD/../index"
-result_dir="$PWD/results_${db_name}/erc20_${test_name}"
-log_dir="$PWD/logs/test_erc20_${test_name}"
+result_dir="$PWD/results_${db_name}/erc20_no_load_${test_name}"
+log_dir="$PWD/logs/test_erc20_no_load_${test_name}"
 echo "data_path: $data_path"
 echo "index_path: $index_path"
 echo "result_dir: $result_dir"
@@ -144,7 +144,7 @@ seed=${seed}" | tee -a "$log_file"
         -k ${key_size} \
         -d ${data_path} \
         -i ${index_path} \
-        -o ${result_path} | tee -a "$log_file"
+        -o ${result_path} 2>&1 | tee -a "$log_file"
 
     sleep 5
     set +x

@@ -27,8 +27,11 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <execinfo.h>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -42,6 +45,35 @@
 #include "generator.hpp"
 
 namespace {
+
+// Print a bounded backtrace to stderr so we can localize crashes that
+// bypass the C++ exception path (segfault, stack overflow, abort).
+void PrintStackTrace(int max_frames = 32) {
+  void* buf[32];
+  int n = std::min(max_frames, 32);
+  n = backtrace(buf, n);
+  std::cerr << "backtrace(" << n << " frames):" << std::endl;
+  backtrace_symbols_fd(buf, n, STDERR_FILENO);
+}
+
+// Signal handler: catch segfault/stack overflow/abort before the OS prints
+// something cryptic. Just logs and re-raises the default handler so a
+// core dump / clean exit still happens.
+void OnFatalSignal(int sig) {
+  std::cerr << "FATAL: received signal " << sig
+            << " (likely segfault/stack overflow/abort)" << std::endl;
+  PrintStackTrace();
+  std::cerr.flush();
+  std::signal(sig, SIG_DFL);
+  std::raise(sig);
+}
+
+void InstallSignalHandlers() {
+  std::signal(SIGSEGV, OnFatalSignal);
+  std::signal(SIGABRT, OnFatalSignal);
+  std::signal(SIGFPE,  OnFatalSignal);
+  std::signal(SIGBUS,  OnFatalSignal);
+}
 
 // 8-byte little-endian uint64 encoding (matches doc value semantics).
 std::string EncodeU64LE(uint64_t v) {
@@ -101,6 +133,10 @@ std::string MakeErcKey(const std::string& contract16,
 }  // namespace
 
 int main(int argc, char** argv) {
+  // Install handlers early so segfaults in setup are also captured.
+  InstallSignalHandlers();
+
+  try {
   int num_accout = 100000000;
   uint64_t num_txn = 36029300000ULL;
   double contract_ratio = 0.1;
@@ -398,7 +434,7 @@ int main(int argc, char** argv) {
     double tmp_throughput =
       (txn_elapsed > 0) ? static_cast<double>(executed_tx) / txn_elapsed : 0.0;
 
-    if(block_count % 1000 == 0){
+    if(block_count % 10 == 0){
       std::cout << "block " << block_count << " (version " << version
                 << ") entries=" << entries_in_block
                 << " executed=" << executed_tx
@@ -440,4 +476,13 @@ int main(int argc, char** argv) {
   }
 
   return true;
+  } catch (const std::exception& e) {
+    std::cerr << "FATAL: " << e.what() << std::endl;
+    PrintStackTrace();
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "FATAL: non-std exception" << std::endl;
+    PrintStackTrace();
+    return EXIT_FAILURE;
+  }
 }
