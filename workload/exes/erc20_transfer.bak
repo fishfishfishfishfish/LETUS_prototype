@@ -257,18 +257,20 @@ int main(int argc, char** argv) {
 
   // Seeded RNGs (offset to avoid overlap across streams).
   UniformGenerator initial_balance_gen(0, initial_balance_max, seed + 1);
-  cout << "using CounterGenerator to generate account ids" << endl;
-  CounterGenerator load_account_gen(0, num_accout);
+  // UniformGenerator load_holder_gen(holder_base,
+  //                                  holder_base + num_holders_pool - 1,
+  //                                  seed + 2);
+  cout << "using CounterGenerator to generate holder ids" << endl;
+  CounterGenerator load_holder_gen(holder_base, holder_base + num_holders_pool - 1);
 
-  // ---- STREAM LOAD PHASE ----
-  // Iterate every account sequentially, accumulate puts into a single
+  // ---- STREAM LOAD PHASE (mirrors streamLoadErcBalances in Go) ----
+  // Iterate every (contract, holder) pair, accumulate puts into a single
   // growing batch, and flush to the trie whenever the batch reaches
   // `load_batch_size`. Each flush bumps the trie version so the prior
   // commit is observable. Memory cost stays O(load_batch_size).
-  // Accounts are written as a flat sequence (no contract/holder split):
-  // key = DeriveAddress(i, key_len) zero-padded to key_len.
   int version = 1;
-  std::cout << "load: num_accout=" << num_accout
+  std::cout << "load: num_contracts=" << num_contracts
+            << ", ercHoldersPer=" << num_holders_pool
             << ", load_batch_size=" << load_batch_size << std::endl;
 
   uint64_t total_written = 0;
@@ -277,33 +279,37 @@ int main(int argc, char** argv) {
   auto start = chrono::system_clock::now();
   auto end = chrono::system_clock::now();
   double load_latency = 0;
-  load_account_gen.Set(base_data - 1);
-  for (uint64_t i = 0; i < static_cast<uint64_t>(base_data); i++) {
-    uint64_t ai = load_account_gen.Next();
-    std::string key = DeriveAddress(ai, key_len);
-    std::string val = EncodeU64LE(initial_balance_gen.Next());
-    // Put writes only to the in-memory cache; only Commit triggers IO,
-    // so we can issue every Put immediately and Commit once per batch.
-    trie->Put(0, version, key, val);
-    ++total_written;
-    ++batch_count;
+  for (int ci = 0; ci < num_contracts; ci++) {
+    load_holder_gen.Set(holder_base + num_holders_pool - 1);
+    std::string contract16 = DeriveAddress(static_cast<uint64_t>(ci), key_len);
+    for (uint64_t k = 0; k < num_holders_pool; k++) {
+      uint64_t hi = load_holder_gen.Next();
+      std::string holder16 = DeriveAddress(hi, key_len);
+      std::string key = MakeErcKey(contract16, holder16, key_len);
+      std::string val = EncodeU64LE(initial_balance_gen.Next());
+      // Put writes only to the in-memory cache; only Commit triggers IO,
+      // so we can issue every Put immediately and Commit once per batch.
+      trie->Put(0, version, key, val);
+      ++total_written;
+      ++batch_count;
 
-    if (static_cast<int>(batch_count) >= load_batch_size) {
-      trie->Commit(version);
-      end = chrono::system_clock::now();
-      auto duration =
-        double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
-          chrono::microseconds::period::num /
-          chrono::microseconds::period::den;
-      load_latency += duration;
-      if ((version) % 1000 == 0) {
-        std::cout << "load version " << version
-                  << " batch size=" << batch_count
-                  << " latency:" << duration << std::endl;
+      if (static_cast<int>(batch_count) >= load_batch_size) {
+        trie->Commit(version);
+        end = chrono::system_clock::now();
+        auto duration =
+          double(chrono::duration_cast<chrono::microseconds>(end - start).count()) *
+            chrono::microseconds::period::num /
+            chrono::microseconds::period::den;
+        load_latency += duration;
+        if ((version) % 1000 == 0) {
+          std::cout << "load version " << version
+                    << " batch size=" << batch_count
+                    << " latency:" << duration << std::endl;
+        }
+        start = chrono::system_clock::now();
+        version++;
+        batch_count = 0;
       }
-      start = chrono::system_clock::now();
-      version++;
-      batch_count = 0;
     }
   }
   // Commit the tail (may be smaller than load_batch_size).
