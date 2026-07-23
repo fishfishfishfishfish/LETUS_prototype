@@ -97,6 +97,15 @@ add_executable(lineageBenchmarkV1 "workload/exes/lineageBenchmarkV1.cc" ${letus_
 target_link_libraries(lineageBenchmarkV1 OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
 add_executable(lineageBenchmarkV2 "workload/exes/lineageBenchmarkV2.cc" ${letus_src})
 target_link_libraries(lineageBenchmarkV2 OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
+add_executable(random_key_write_test "tests/random_key_write_test.cc" ${letus_src})
+target_link_libraries(random_key_write_test OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
+add_test(
+    NAME random_key_write_smoke
+    COMMAND random_key_write_test
+            --seed 42
+            --versions 3
+            --writes-per-version 100
+            --verify-samples 100)
 # add_executable(LSVPStest ${letus_tests})
 # target_link_libraries(LSVPStest letus GTest::GTest GTest::Main)
 
