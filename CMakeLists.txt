@@ -111,12 +111,16 @@ target_link_libraries(erc20_stream_load_test OpenSSL::SSL OpenSSL::Crypto ${GNUC
 add_test(
     NAME erc20_stream_load_tail_batch
     COMMAND erc20_stream_load_test
-            --base-data 1001
+            --num-accounts 100
+            --contract-ratio 0.1
+            --base-data 1010
             --load-batch-size 100
             --verify-samples 101)
 add_test(
     NAME erc20_stream_load_exact_batch
     COMMAND erc20_stream_load_test
+            --num-accounts 100
+            --contract-ratio 0.1
             --base-data 1000
             --load-batch-size 100
             --verify-samples 100)
