@@ -106,6 +106,20 @@ add_test(
             --versions 3
             --writes-per-version 100
             --verify-samples 100)
+add_executable(erc20_stream_load_test "tests/erc20_stream_load_test.cc" ${letus_src})
+target_link_libraries(erc20_stream_load_test OpenSSL::SSL OpenSSL::Crypto ${GNUC_LIBRARIES})
+add_test(
+    NAME erc20_stream_load_tail_batch
+    COMMAND erc20_stream_load_test
+            --base-data 1001
+            --load-batch-size 100
+            --verify-samples 101)
+add_test(
+    NAME erc20_stream_load_exact_batch
+    COMMAND erc20_stream_load_test
+            --base-data 1000
+            --load-batch-size 100
+            --verify-samples 100)
 # add_executable(LSVPStest ${letus_tests})
 # target_link_libraries(LSVPStest letus GTest::GTest GTest::Main)
 
